@@ -1,0 +1,26 @@
+- equal hash table
+- add support for continuations
+- stack trace should limit output length, in particular when printing 
+  sequences
+- capture signal SIGKILL and then show backtrace before exiting
+- make basic forms check for number of arguments *done
+- better error reporting *now almost acceptable, reader still to improve
+- symbols and symbol table *done
+- dynamic handling of global vars (trough symbols?) *done
+- simple copying garbage collector *seems to work
+- garbage collector trace objects recursevly, if they are too deeply nested
+  C's stack will overflow *solved
+- test the garbage collector
+- mkvec and mkstr don't initialize their elements *solved
+- add support for floating point numbers *done
+- add more floating point operations
+- add generic operations that work with both fixnums and floats
+- full let, with, withs, if syntax *done
+- write a reader *work in progress, misses ssyntax
+- make more abstract the generation of assembly code to easily switch to 
+  other assemblers *done
+- avoid creation of multiple constants that are eql *done
+- dynamic loading and execution of compiled files *done
+- allow primitive operations in non-operator position
+- (car nil) and (cdr nil) should return nil, not an error *done
+....
