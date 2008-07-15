@@ -435,9 +435,10 @@ char* expand_heap(gc *g, char *heap_pt, int stack_top, unsigned int n)
 
 //int count = 0;
 
-char* main_expand_heap(char *heap_pt, unsigned int stack_top, unsigned int n)
-{
-  int top = (int)stack_top - (int)(main_gc.stack);
+/* paremeter heap_pt is now useless: remember to remove */
+//char* main_expand_heap(char *heap_pt, unsigned int stack_top, unsigned int n)
+//{
+// int top = (int)stack_top - (int)(main_gc.stack);
   //  printf("%p %d %d\n", heap_pt, top, n);
 
   //  print_backtrace((unsigned int)main_gc.stack, stack_top);
@@ -456,7 +457,16 @@ char* main_expand_heap(char *heap_pt, unsigned int stack_top, unsigned int n)
   //if (main_gc.heap1_next!=heap_pt)
   //printf("%u != %u, diff = %d\n", main_gc.heap1_next, heap_pt, heap_pt-main_gc.heap1_next);
 
-  char *ret = expand_heap(&main_gc, /*main_gc.heap1_next*/heap_pt, top/wordsize, n);
+//  char *ret = expand_heap(&main_gc, main_gc.heap1_next/*heap_pt*/, top/wordsize, n);
+//  main_gc.heap1_next = ret+n;
+
+//  return ret;
+//}
+
+char* main_expand_heap2(unsigned int stack_top, unsigned int n)
+{
+  int top = (int)stack_top - (int)(main_gc.stack);
+  char *ret = expand_heap(&main_gc, main_gc.heap1_next/*heap_pt*/, top/wordsize, n);
   main_gc.heap1_next = ret+n;
 
   return ret;
