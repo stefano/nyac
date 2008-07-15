@@ -1,0 +1,18 @@
+(__load "build-arc/basic-fns.arc.so")
+(__load "build-arc/basic-macs.arc.so")
+(__load "build-arc/lib.arc.so")
+(__load "build-arc/print.arc.so")
+(__load "build-arc/read.arc.so")
+(__load "build-arc/comp-utils.arc.so")
+(__load "build-arc/code-walker.arc.so")
+(__load "build-arc/transformations.arc.so")
+(__load "build-arc/comp.arc.so")
+
+(with (in (stdin-stream)
+       out (stdout-stream))
+  (def repl ()
+    (write-string "> " out)
+    (print (eval (read/tbl in read-table)))
+    (repl)))
+
+(repl)

@@ -1,0 +1,5 @@
+build-2008-07-14.tar.bz2
+tmp/*
+build-arc/*
+std.arc.so
+bootstrap.arc.run

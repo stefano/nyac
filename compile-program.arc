@@ -1,0 +1,12 @@
+(__load "basic-fns.l.so")
+;(__load "basic-macs.l.so")
+(__load "lib.l.so")
+(__load "print.l.so")
+(__load "read.l.so")
+(__load "meta-comp-utils.l.so")
+(__load "meta-code-walker.l.so")
+(__load "meta-transformations.l.so")
+(__load "meta-comp.l.so")
+
+(__load "build/basic-macs.l.so")
+(feach (fn (f) (compile-program f "build")) (readall (stdin-stream)))
