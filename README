@@ -22,12 +22,12 @@ then enter nyac directory:
 
 $ cd nyac
 
-now you'll need to unpack the precompiled binaries (the date in the name may 
-vary) and to set LD_LIBRARY_PATH (this assumes that you're using bash):
+now you'll need to unpack the precompiled binaries and to set LD_LIBRARY_PATH 
+(this assumes that you're using bash):
 
-$ tar -jxvf nyac-build-linux-x86-32-2008-07-15.tar.bz2
+$ tar -jxvf nyac-build-linux-x86-32.tar.bz2
 
-$ export LD_LIBRARY_PATH=.:build-arc:$LD_LIBRARY_PATH
+$ export LD_LIBRARY_PATH=build-arc:$LD_LIBRARY_PATH
 
 at this point, you should be able to test if it works:
 
