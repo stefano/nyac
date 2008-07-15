@@ -28,7 +28,7 @@ void test_mem(char *mem, unsigned int n, int content)
 typedef struct _gc
 {
   char *heap1; /* heap to be copied */
-  //char *heap1_next; /* next free adress in heap1 */
+  char *heap1_next; /* next free adress in heap1 */
   unsigned int heap1_size;
 
   char *heap2; /* new heap */
@@ -44,7 +44,7 @@ typedef struct _gc
 char* gc_init(gc *g, char *stack)//, char *croots)
 {
   g->heap1 = allocate_protected_space(INITIAL_HEAP_SIZE);
-  //g->heap1_next = g->heap1;
+  g->heap1_next = g->heap1;
   g->heap1_size = INITIAL_HEAP_SIZE;
   //  g->heap1_top = 0;
   g->heap2 = 0;
@@ -181,7 +181,7 @@ ptr copy_ptr(gc *g, ptr pt)
 		}
 		break;
 	      default:
-		printf("GC: don't know how to handle unknown type\n");
+		printf("GC: don't know how to handle unknown type %d\n", etype);
 		exit(1);
 		break;
 	      }
@@ -355,9 +355,9 @@ char* expand_heap(gc *g, char *heap_pt, int stack_top, unsigned int n)
       //printf("\n\nCollection begin\n");
 	  //  fflush(stdout);
 	  //}
-      unsigned int r = roundp2(n+heap_pt-g->heap1);
+      //unsigned int r = roundp2(n+heap_pt-g->heap1);
       //if (g->next_alloc_size<r)
-      g->next_alloc_size = r;
+      //g->next_alloc_size = r;
 	//printf("Requested %u, allocated %u\n", n+heap_pt-g->heap1, g->next_alloc_size);
       g->heap2 = allocate_protected_space(g->next_alloc_size);//INITIAL_HEAP_SIZE);//g->heap1_size * 2);
       //      test_mem(g->heap2, g->next_alloc_size);
@@ -443,8 +443,9 @@ char* main_expand_heap(char *heap_pt, unsigned int stack_top, unsigned int n)
   //  print_backtrace((unsigned int)main_gc.stack, stack_top);
 
   //  if (DEBUG)
-  //printf("\n\nallocating %d bytes\n", n);
-
+  //printf("allocating %d bytes\n", n);
+  //if (n%8!=0)
+  //printf("!!!\n");
   //  printf("%d\n", count);
   //count++;
   //printf("Begin, stack top is %d\n", top/wordsize);
@@ -452,10 +453,11 @@ char* main_expand_heap(char *heap_pt, unsigned int stack_top, unsigned int n)
   
  //  test_mem(main_gc.heap1, heap_pt-main_gc.heap1, 6);
 
-  //  printf("%p == %p\n", main_gc.heap1_next, heap_pt);
+  //if (main_gc.heap1_next!=heap_pt)
+  //printf("%u != %u, diff = %d\n", main_gc.heap1_next, heap_pt, heap_pt-main_gc.heap1_next);
 
-  return expand_heap(&main_gc, /*main_gc.heap1_next*/heap_pt, top/wordsize, n);
-  //main_gc.heap1_next = ret+n;
+  char *ret = expand_heap(&main_gc, /*main_gc.heap1_next*/heap_pt, top/wordsize, n);
+  main_gc.heap1_next = ret+n;
 
-  //return ret;
+  return ret;
 }

@@ -8,10 +8,11 @@
 (__load "build-arc/transformations.arc.so")
 (__load "build-arc/comp.arc.so")
 
-(compile-minimal "std.arc" "build-arc")
-(feach (fn (f) (compile-unit f "build-arc")) 
+(set out-dir (to-string (read/tbl (stdin-stream) read-table)))
+(compile-minimal "std.arc" out-dir)
+(feach (fn (f) (compile-unit f out-dir)) 
   '("basic-fns.arc" "basic-macs.arc" "print.arc" "read.arc" "lib.arc" 
     "comp-utils.arc" "code-walker.arc" "transformations.arc" 
     "comp.arc"))
-(compile-program "test.arc" "build-arc")
-(compile-program "repl.arc" "build-arc")
+(compile-program "test.arc" out-dir)
+(compile-program "repl.arc" out-dir)

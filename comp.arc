@@ -884,7 +884,7 @@
 
 (install-primop '__float-init 
   (fn (si env in-lbl)
-    (emit-call-expand-heap si (* 4 wordsize))
+;    (emit-call-expand-heap si (* 4 wordsize))
     (fldl-plain in-lbl)
     (emit-build-float si))
   1 nil)
@@ -897,7 +897,7 @@
 
 (def emit-build-float (si)
   ; takes double float from float register stack
-;  (emit-call-expand-heap si (* 4 wordsize))
+  (emit-call-expand-heap si (* 4 wordsize))
   (movl (imm floattag) (deref 0 ebp))
   (fstpl (deref wordsize ebp))
   (movl ebp eax)
