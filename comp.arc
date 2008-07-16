@@ -73,6 +73,12 @@
 (set if-sym '__if)
 (set setq-sym 'set)
 
+(set call-table-lbl "__call_table")
+(set cons-ref-lbl "__cons_ref")
+(set vec-ref-lbl "__vec_ref")
+(set str-ref-lbl "__str_ref")
+(set funcall-lbl "__funcall")
+
 (def fixnump (x)
   (fxp x)); (<= fxlower x) (<= x fxupper)))
 
@@ -1898,10 +1904,74 @@
       (emit-labels expr env (is transformation minimal-transform))
       (emit-init-entry expr env))))
 
+(def decl-long (val)
+  (emit "    .long " val))
+
+(def decl-globl (lbl)
+  (emit "    .globl " lbl))
+
+(def emit-ar-call (si env expr tail apply-p)
+  ; emits code for a generic call: called object can be a function,
+  ; a vector, a string or a cons
+  ; if there are more than one arguments,called object is treated as function
+  ; doesn't work: how to distinguish beetwen the four apply/tail cases in the
+  ; static routines?
+  (if (or apply-p (is (len (funcall-args expr)) 1))
+    (do
+      (emit-expr si env (funcall-closure expr))
+      (emit-save si eax) ; save called object
+      (emit-expr (next-si si) (car (funcall-args expr))) ; the only arg
+      ; get the type tag
+      (movl eax ebx)
+      (andl basicmask ebx)
+      (movl (imm call-table-lbl) ecx) ; get the call table adress
+      (addl ebx ecx) ; make ecx point to the right entry in the table
+      (movl (deref 0 ecx) ecx) ; get entry
+      ; check for invalid entries
+      (cmp (imm 0) ecx)
+      (let cont-lbl (unique-label)
+        (jne cont-label)
+        (movl (imm 0) eax)
+        (addl (imm si) esp)
+        (jmp '__type_error)
+        (label cont-label))
+      ; do the dispatch
+      (jmp (unref-call (deref 0 ecx))))
+    (emit-funcall si env expr tail apply-p)))
+
+(def emit-static-routines ()
+  ; emit code for static routines
+  ; these routines expect return adress in ebx
+  ; function call (with exactly one arg) expects:
+  ; argument in eax
+  ; closure in ecx
+  ; stack index in edx
+  ; (emit-fun-header funcall-lbl)
+  
+  ; vec-ref
+  ; str-ref
+  nil)
+
 (def emit-program ()
+  ; (emit-static-routines)
+
+  ; static call table
+  ; 0 means invalid position
+;  (decl-globl call-table-lbl)
+;  (label call-table-lbl)
+;  (decl-long 0) ; 000 
+;  (decl-long cons-ref-lbl) ; 001
+;  (decl-long funcall-lbl) ; 010
+;  (decl-long 0) ; 011
+;  (decl-long 0) ; 100
+;  (decl-long vec-ref-lbl) ; 101
+;  (decl-long str-ref-lbl) ; 110, should also manage user defined object calls 
+;  (decl-long 0) ; 111
+
   ; entry function
   (globl "lisp_entry")
   (emit-fun-header "lisp_entry")
+
   ; save C context
   (movl (deref 4 esp) ecx)
   (movl ebx (deref 4 ecx))
