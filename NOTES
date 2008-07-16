@@ -1,0 +1,16 @@
+IMPORTANT:
+
+When compiling the compiler with itself (using bootstrap.arc.run), 
+the macros compiled will not be loaded in the the host runtime, so the 
+compiled code will be macroexpanded using _only_ the macros available in 
+the host compiler.
+This avoids a lot of problems when compiling a new version of the compiler 
+that targets a runtime different from that of the host compiler.
+For the same reason, the compiler code shouldn't use 'eval
+
+How to use a macro in the compiler code?
+
+- Write the macro
+- Recompile the compiler
+- Now the macro can be used in the compiler sources when they are compiled
+  with the new version of the compiler
