@@ -95,6 +95,9 @@ void print_ptr(ptr x)
 	      case float_tag:
 		printf("%.18F", flval(x));
 		break;
+	      case continuation_tag:
+		printf("#<continuation>");
+		break;
 	      default:
 		printf("#<unknown %x>", x);
 		break;

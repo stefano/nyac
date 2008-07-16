@@ -39,6 +39,8 @@
 
 #define float_tag 0xCF
 
+#define continuation_tag 0x8F
+#define continuation_stack_len_offset (-extended_tag+wordsize)
 #define frame_sentinel 0xFF
 
 #define broken_heart_tag 0x8F
@@ -78,6 +80,8 @@ typedef unsigned int ptr;
 #define bh_addr(x, tag) (((*((ptr*)(((char*)(x))-(tag)+wordsize)))))
 
 #define flval(x) (*((double*)(((char*)(x))-extended_tag+wordsize)))
+
+#define continuation_stack_size(x) (*((unsigned int*)(((char*)(x))+continuation_stack_len_offset)))
 
 typedef struct _context
 {

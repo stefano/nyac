@@ -136,7 +136,7 @@ ptr resolve_broken_heart(ptr pt, unsigned int type)
     return pt;
 }
 
-ptr copy_ptr(gc *g, ptr pt)
+ptr copy_ptr(gc *g, ptr pt, char *ptr_address)
 {
   unsigned int type = basic_type(pt);
   if (check_broken_heart(pt, type))
@@ -177,6 +177,16 @@ ptr copy_ptr(gc *g, ptr pt)
 		  mark_bh(pt, extended_tag);
 		  bh_addr(pt, extended_tag) = (ptr)new_addr;
 		  //printf("fl %p\n", bh_addr(
+		  return ((ptr)new_addr)|extended_tag;
+		}
+		break;
+	      case continuation_tag:
+		{
+		  char *addr = ((char*)pt)-extended_tag;
+		  char *new_addr = g->heap2+g->heap2_top;
+		  copy_n(g, addr, continuation_stack_size(pt)+5*wordsize);
+		  mark_bh(pt, extended_tag);
+		  bh_addr(pt, extended_tag) = (ptr)new_addr;
 		  return ((ptr)new_addr)|extended_tag;
 		}
 		break;
@@ -242,8 +252,22 @@ ptr copy_ptr(gc *g, ptr pt)
       break;
     default:
       {
-	//printf("default: %xk\n", pt);
-	  return pt;
+	/* frame_sentinel can appear only in the stack as a marker, but
+	   when a continuation is created the stack is copied in the heap, 
+	   so frame_sentinel (and the following adress) can appear here 
+	   if pt_adress==0 then pt is a root pointer and it must not be 
+	   passed to copy_ptr if it is a frame_sentinel */
+        if (pt==frame_sentinel)
+	  {
+	    if (ptr_address==0)
+	      {
+		printf("Error: found a frame sentinel where it shouldn't be");
+		exit(1);
+	      }
+	    copy_n(g, ptr_address, 2*wordsize);
+	    return pt;
+	  }
+	return pt;
       }
       break;
     }
@@ -271,6 +295,16 @@ unsigned int skip(gc *g, ptr pt, unsigned int start)
 	return start+4*wordsize;
       }
       break;
+    case continuation_tag:
+      {
+	return start+4*wordsize;
+      }
+      break;
+    case frame_sentinel:
+      {
+	return start+2*wordsize; /* skip sentinel and following adress */
+      }
+      break;
     default:
       return start+wordsize;
       break;
@@ -286,7 +320,7 @@ ptr do_copy(gc *g, ptr pt)
       print_ptr(pt);
       printf("\n");
     }
-  pt = copy_ptr(g, pt);
+  pt = copy_ptr(g, pt, 0);
   /*
   if (pt==6)
     {
@@ -318,7 +352,8 @@ ptr do_copy(gc *g, ptr pt)
 	}
 
       //printf("c: %x\n",*((ptr*)(g->heap2+start)));
-      *((ptr*)(g->heap2+start)) = copy_ptr(g, *((ptr*)(g->heap2+start)));
+      *((ptr*)(g->heap2+start)) = copy_ptr(g, *((ptr*)(g->heap2+start)),
+					   g->heap2+start);
       //printf("c: %x\n",*((ptr*)(g->heap2+start))); 
       //fflush(stdout);
       start = skip(g, *((ptr*)(g->heap2+start)), start);
@@ -397,7 +432,9 @@ char* expand_heap(gc *g, char *heap_pt, int stack_top, unsigned int n)
 	    }
 	  if (previous!=frame_sentinel) /* g->stack[i] isn't a ret. addr. */
 	    {
-	      g->stack[i] = do_copy(g, g->stack[i]);
+	      if (g->stack[i]!=frame_sentinel)
+		/* sentinels cannot be passed to do_copy */
+		g->stack[i] = do_copy(g, g->stack[i]);
 	      previous = g->stack[i];
 	    }
 	  else
