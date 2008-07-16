@@ -295,11 +295,24 @@ void* load_file(ptr filename)
   return dlsym(handle, "__init");
 }
 
+void* load_std()
+{
+  void *handle = dlopen("std.arc.so", RTLD_NOW|RTLD_GLOBAL);
+  if (!handle)
+    return 0;
+  return dlsym(handle, "__init");
+}
+
 void* full_load(ptr filename)
 {
-  char *fname = strtocstr(filename);
+  char *fname;
+  if (((unsigned int)filename)==nil_val)
+    fname = "std.arc.so";
+  else
+    fname = strtocstr(filename);
   void *handle = dlopen(fname, RTLD_NOW|RTLD_GLOBAL);
-  free(fname);
+  if ((unsigned int)filename!=nil_val)
+    free(fname);
   if (!handle)
     return 0;
   return dlsym(handle, "__init");

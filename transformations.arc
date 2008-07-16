@@ -408,5 +408,5 @@
 ; installs a macro (not a true transformation)
 (install-macro 'mac 
   (fn (name args . body)
-    (install-macro name (eval (list '__fn args (cons 'do body))))
+    ;(install-macro name (eval (list '__fn args (cons 'do body))))
     (list 'install-macro (list 'quote name) (list '__fn args (cons 'do body)))))

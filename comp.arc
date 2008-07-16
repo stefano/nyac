@@ -363,16 +363,30 @@
   (movl eax ebx)
   (op-and (imm mask) ebx)
   (cmp (imm tag) ebx)
-  (with (;error-label (unique-label)
-	 cont-label (unique-label))
-    ;(jne error-label)
-    ;(jmp cont-label)
+  (let cont-label (unique-label)
     (je cont-label)
-    ;(label error-label)
     (movl (imm 0) eax)
     (addl (imm si) esp)
     (jmp '__type_error)
+;    (movl (imm cont-label) ecx)
+;    (movl (imm si) edx)
+;    (jmp (make-string "__check_" name))
     (label cont-label)))
+
+(def emit-static-type-check-routine (name mask tag)
+  ; expect ret address in ecx, si in edx
+  (decl-globl (make-string "__check_" name))
+  (emit-fun-header (make-string "__check_" name))
+  (movl eax ebx)
+  (op-and (imm mask) ebx)
+  (cmp (imm tag) ebx)
+  (let err-label (unique-label)
+    (jne err-label)
+    (jmp (unref-call (deref 0 ecx)))
+    (label err-label)
+    (movl (imm 0) eax)
+    (addl edx esp)
+    (jmp '__type_error)))
 
 (def emit-extended-type-check (si env tag . mask)
   (let mask (car mask)
@@ -1941,10 +1955,17 @@
 
 (def emit-static-routines ()
   ; emit code for static routines
-  ; these routines expect return adress in ebx
+  ; these routines expect return adress in ecx
+  (emit-static-type-check-routine "extended" basicmask extendedtag)
+  (emit-static-type-check-routine "fx" fxmask fxtag)
+  (emit-static-type-check-routine "ch" chmask chtag)
+  (emit-static-type-check-routine "cell" cellmask celltag)
+  (emit-static-type-check-routine "vec" vecmask vectag)
+  (emit-static-type-check-routine "sym" symbolmask symboltag)
+  (emit-static-type-check-routine "closure" closuremask closuretag)
   ; function call (with exactly one arg) expects:
   ; argument in eax
-  ; closure in ecx
+  ; closure in ebx
   ; stack index in edx
   ; (emit-fun-header funcall-lbl)
   
@@ -1953,7 +1974,7 @@
   nil)
 
 (def emit-program ()
-  ; (emit-static-routines)
+  ;(emit-static-routines)
 
   ; static call table
   ; 0 means invalid position
@@ -1987,7 +2008,7 @@
   ; init %edi at some meaningful value
   (movl (imm (imm-rep nil)) edi)
   ; call entry labels
-  (emit-expr (- wordsize) (mk-empty-env) '(__load (string #\s #\t #\d #\. #\a #\r #\c #\. #\s #\o)))
+  (emit-expr (- wordsize) (mk-empty-env) '(__load nil));(string #\s #\t #\d #\. #\a #\r #\c #\. #\s #\o)))
   (emit-save (- wordsize) (imm frame-sentinel))
   (addl (imm (- wordsize)) esp)
   (call "__init")
@@ -2005,6 +2026,8 @@
   (with (e (cons 'do (readall stream-in))
          old stdout*)
     (set stdout* stream-out)
+    ;(if (is transform-fn minimal-transform)
+    ;  (emit-static-routines))
     (emit-unit e (mk-empty-env) transform-fn)
     (if program-p
       (emit-program))
@@ -2015,7 +2038,7 @@
           in-file (open-file file-name 'in)
           out-file (open-file out-name 'out))
     (compile in-file out-file t transform-expr)
-    (if (is (system (make-string "gcc -g -o " out-dir "/" file-name ".run start.c " out-name " std.arc.so -ldl 2>err")) 0)
+    (if (is (system (make-string "gcc -g -o " out-dir "/" file-name ".run start.c " out-name " " out-dir "/std.arc.so -ldl 2>err")) 0)
       t
       (err "Compilation error: see file err"))))
 
