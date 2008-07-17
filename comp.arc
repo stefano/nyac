@@ -364,6 +364,14 @@
     (label loop-end))
   (subl (imm si) esp)) ; restore esp
 
+(def emit-call-stack-copy-rev (si)
+  ; emit code to call the C function stack_copy_rev
+  (lea (deref si esp) eax) ; stack_top
+  (emit-save si eax)
+  (addl si esp)
+  (call "stack_copy_rev")
+  (subl si esp))
+
 (def emit-type-pred (basic-mask basic-tag . rest)
   (with (etag (car rest)
          emask (cadr rest))

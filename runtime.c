@@ -320,3 +320,16 @@ void* full_load(ptr filename)
     return 0;
   return dlsym(handle, "__init");
 }
+
+/*
+  allocates space in the heap and copies the current stack in reverse order
+  into it
+*/
+void stack_copy_rev(unsigned int stack_top)
+{
+  unsigned int top = stack_top/wordsize;
+  ptr *dest = main_expand_heap2(stack_top, stack_top-main_stack_base);
+  ptr *src = main_stack_base+top;
+  while (src!=main_stack_base)
+    *dest++ = *src--;
+}

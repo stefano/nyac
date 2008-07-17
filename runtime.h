@@ -113,4 +113,6 @@ void* full_load(ptr filename);
 
 extern ptr *main_stack_base;
 
+char* main_expand_heap2(unsigned int stack_top, unsigned int n);
+
 #endif /* RUNTIME_H */
