@@ -333,3 +333,15 @@ void stack_copy_rev(unsigned int stack_top)
   while (src!=main_stack_base)
     *dest++ = *src--;
 }
+
+/*
+  takes a stack saved in the heap and overwrites with it the current stack
+  len is in bytes
+*/
+void restore_stack_from(ptr *from, unsigned int len)
+{
+  ptr *dest = main_stack_base;
+  ptr *end = ((char*)dest)-len;
+  while (dest!=end)
+    *dest-- = *from++;
+}
