@@ -339,6 +339,31 @@
       (movl eax ebp))
     (emit-load si edi)))
 
+; runtime global memory area holding the base of the current stack
+(set main-stack-base "main_stack_base")
+
+(def emit-stack-copy-rev (si)
+  ; emit code to copy the stack up to si (exclusive) into the heap
+  ; the stack grows downwards and the heap upwards, so it is copied in 
+  ; reverse order
+  ; space on the heap must be allocated and memory pointer must be in %ebp
+  ; ebx: source pointer
+  ; ebp: target pointer
+  (movl main-stack-base ebx)
+  (addl (imm si) esp) ; esp: first adress not to copy
+  (with (loop-start (unique-label)
+         end (unique-label))
+    (label loop-start)
+    (cmp ebx esp)
+    (je end)
+    (movl (deref 0 ebx) ecx) ; copy wordsize bytes
+    (movl ecx (deref 0 ebp))
+    (addl (imm wordsize) ebp) ; next target adress
+    (addl (imm (- wordsize)) ebx) ; next source adress
+    (jmp loop-start)
+    (label loop-end))
+  (subl (imm si) esp)) ; restore esp
+
 (def emit-type-pred (basic-mask basic-tag . rest)
   (with (etag (car rest)
          emask (cadr rest))
