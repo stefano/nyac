@@ -110,13 +110,13 @@ void print_ptr(ptr x)
 	int i;
 	//printf("<contents: %p %d>", (char*)sym_ref(x, 0), str_len(sym_ref(x, 0)));
 	ptr s = sym_ref(x, 0);
-	//printf("#<sym: ");
-	//print_ptr(s);
+	printf("#<sym: ");
+	print_ptr(s);
 	//printf(", ");/* print_ptr(sym_ref(x, 1));*/ printf(", ");
 	//print_ptr(sym_ref(x, 2));
-	//printf(">");
-	for (i = 0; i<str_len(s); i++)
-	  printf("%c", str_ref(s, i));
+	printf(">");
+	//for (i = 0; i<str_len(s); i++)
+	//printf("%c", str_ref(s, i));
       }
       break;
     default:
@@ -323,15 +323,28 @@ void* full_load(ptr filename)
 
 /*
   allocates space in the heap and copies the current stack in reverse order
-  into it
+  into it. also allocate space for the continuation. return cont. start adress
+  the stack contains a closure (edi) on the top that must not be saved
 */
-void stack_copy_rev(unsigned int stack_top)
+char* stack_copy_rev(ptr* stack_top)
 {
-  unsigned int top = stack_top/wordsize;
-  ptr *dest = main_expand_heap2(stack_top, stack_top-main_stack_base);
-  ptr *src = main_stack_base+top;
-  while (src!=main_stack_base)
-    *dest++ = *src--;
+  stack_top++; /* to skip saving edi in continuation */
+  ptr *ret = main_expand_heap2(stack_top-1, 
+			       5*wordsize+((unsigned int)main_stack_base-(unsigned int)stack_top));
+  printf("allocating %d bytes\n", 5*wordsize+((unsigned int)main_stack_base)-(unsigned int)stack_top);
+  ptr *dest = ret + 5;
+  ptr *src = main_stack_base-1;
+  //  stack_top++;
+  //  printf("here\n");
+  while (src!=stack_top)
+    {
+      printf("about to copy: %x\n", *src);
+      //print_ptr(*src);
+      //printf("\n");
+      *dest++ = *src--;
+    }
+
+  return (char*)ret;
 }
 
 /*
@@ -343,5 +356,6 @@ void restore_stack_from(ptr *from, unsigned int len)
   ptr *dest = main_stack_base;
   ptr *end = ((char*)dest)-len;
   while (dest!=end)
-    *dest-- = *from++;
+    *dest-- = *from++; /* !!! this modifies the same stack where the return 
+			  address of this function is saved !!! */
 }

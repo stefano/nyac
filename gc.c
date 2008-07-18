@@ -185,6 +185,7 @@ ptr copy_ptr(gc *g, ptr pt, char *ptr_address)
 		  char *addr = ((char*)pt)-extended_tag;
 		  char *new_addr = g->heap2+g->heap2_top;
 		  copy_n(g, addr, continuation_stack_size(pt)+5*wordsize);
+		  //printf("copying continuation: %d bytes\n",continuation_stack_size(pt)+5*wordsize );
 		  mark_bh(pt, extended_tag);
 		  bh_addr(pt, extended_tag) = (ptr)new_addr;
 		  return ((ptr)new_addr)|extended_tag;
@@ -254,19 +255,20 @@ ptr copy_ptr(gc *g, ptr pt, char *ptr_address)
       {
 	/* frame_sentinel can appear only in the stack as a marker, but
 	   when a continuation is created the stack is copied in the heap, 
-	   so frame_sentinel (and the following adress) can appear here 
+	   so frame_sentinel (and the following address) can appear here. 
 	   if pt_adress==0 then pt is a root pointer and it must not be 
 	   passed to copy_ptr if it is a frame_sentinel */
-        if (pt==frame_sentinel)
-	  {
-	    if (ptr_address==0)
-	      {
-		printf("Error: found a frame sentinel where it shouldn't be");
-		exit(1);
-	      }
-	    copy_n(g, ptr_address, 2*wordsize);
-	    return pt;
-	  }
+        //if (pt==frame_sentinel)
+	//{
+	//  if (ptr_address==0)
+	//    {
+	//printf("Error: found a frame sentinel where it shouldn't be");
+	//exit(1);
+	//    }
+	//  printf("f.sent\n");
+	    //copy_n(g, ptr_address, 2*wordsize);
+	//  return pt;
+	//}
 	return pt;
       }
       break;
@@ -275,7 +277,7 @@ ptr copy_ptr(gc *g, ptr pt, char *ptr_address)
 
 unsigned int skip(gc *g, ptr pt, unsigned int start)
 {
-  //  printf("In skip\n");
+  //  printf("In skip %p\n", pt);
   //if (pt==6)
   //{
   //  printf("!!\n");
@@ -297,12 +299,13 @@ unsigned int skip(gc *g, ptr pt, unsigned int start)
       break;
     case continuation_tag:
       {
+	//printf("here\n");
 	return start+4*wordsize;
       }
       break;
     case frame_sentinel:
       {
-	return start+2*wordsize; /* skip sentinel and following adress */
+	return start+2*wordsize; /* skip sentinel and following address */
       }
       break;
     default:
@@ -503,8 +506,10 @@ char* expand_heap(gc *g, char *heap_pt, int stack_top, unsigned int n)
 char* main_expand_heap2(unsigned int stack_top, unsigned int n)
 {
   int top = (int)stack_top - (int)(main_gc.stack);
-  char *ret = expand_heap(&main_gc, main_gc.heap1_next/*heap_pt*/, top/wordsize, n);
-  main_gc.heap1_next = ret+n;
-
+  unsigned int size = round_at_boundary(n, 2*wordsize);
+  //printf("expanding %d\n", size);
+  char *ret = expand_heap(&main_gc, main_gc.heap1_next/*heap_pt*/, top/wordsize, size);
+  main_gc.heap1_next = ret+size;
+  //printf("end gc\n");
   return ret;
 }

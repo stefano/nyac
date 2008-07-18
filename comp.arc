@@ -58,6 +58,8 @@
 (set floattag 207) ; #xCF
 (set float-offset (- wordsize extendedtag))
 
+(set continuation-tag 175) ; #xAF
+
 (set unbound-val 63) ; #b111111
 
 ;; tells that the next value in the stack is a return adress
@@ -364,13 +366,45 @@
     (label loop-end))
   (subl (imm si) esp)) ; restore esp
 
+(def emit-restore-stack ()
+  ; emit code to copy back the stack from the heap to main_stack_base
+  ; expects closure in eax and continuation's stack pt. in esp
+  ; ecx: current address to copy
+  ; edx: main stack destination
+  ; esp: destination end point
+  (movl (deref (+ (- extendedtag) wordsize) eax) ebx) ; stack len
+  (lea (deref (+ (- extendedtag) (* 5 wordsize)) eax) ecx) ; stack start addr.
+  (movl main-stack-base edx)
+  (movl edx esp)
+  (subl ebx esp)
+  (subl (imm wordsize) edx)
+  (with (loop-start (unique-label)
+         loop-end (unique-label))
+    (label loop-start)
+    (cmp edx esp) ; test 
+    (je loop-end)
+    (movl (deref 0 ecx) ebx)
+    (movl ebx (deref 0 edx))
+    (addl (imm wordsize) ecx)
+    (addl (imm (- wordsize)) edx)
+    (jmp loop-start)
+    (label loop-end)))
+;  (movl (deref (+ (- extendedtag) wordsize) eax) ebx) ; stack len
+;  (addl ebx esp))
+
 (def emit-call-stack-copy-rev (si)
   ; emit code to call the C function stack_copy_rev
-  (lea (deref si esp) eax) ; stack_top
-  (emit-save si eax)
-  (addl si esp)
-  (call "stack_copy_rev")
-  (subl si esp))
+  ; stack_copy_rev allocates heap space, so edi must be passed in the stack
+  ; and then restored, because the GC could change the location of the closure
+  ; it points at
+  (emit-save si edi)
+  (let si (next-si si)
+    (lea (deref si esp) eax) ; stack_top
+    (emit-save si eax)
+    (addl (imm si) esp)
+    (call "stack_copy_rev")
+    (subl (imm si) esp))
+  (emit-load si edi))
 
 (def emit-type-pred (basic-mask basic-tag . rest)
   (with (etag (car rest)
@@ -2054,6 +2088,41 @@
   (movl (deref 24 ecx) ebp)
   (movl (deref 28 ecx) esp)
   (emit-fun-ret))
+
+; Continuation structure:
+; -----------------------------------------------------------------------
+; | tag      | stack len (bytes) | ret. addr. | esp    | edi     | stack
+; -----------------------------------------------------------------------
+; | wordsize | wordsize          | wordsize   | w.size | w. size | ... 
+; -----------------------------------------------------------------------
+
+(install-primop '__save-continuation 
+  (fn (si env)
+    (let ret-label (unique-label)
+      (emit-call-stack-copy-rev si)
+      (movl (imm continuation-tag) (deref 0 eax))
+      (movl main-stack-base ebx)
+      (subl esp ebx) ; calculate stack len
+      (subl (imm si) ebx)
+      (movl ebx (deref wordsize eax))
+      (movl (imm ret-label) (deref (* 2 wordsize) eax)) ; ret. adress
+      (movl esp (deref (* 3 wordsize) eax))
+      (movl edi (deref (* 4 wordsize) eax))
+      (op-orl (imm extendedtag) eax)
+      (label ret-label)))
+  0 nil)
+
+(install-primop '__restore-continuation
+  (fn (si env expr)
+    (emit-expr si env expr)
+    (emit-extended-type-check si env continuation-tag)
+    (emit-restore-stack)
+    (movl (deref (+ (- extendedtag) (* 3 wordsize)) eax) esp) ; restore esp
+    (movl (deref (+ (- extendedtag) (* 4 wordsize)) eax) edi) ; restore cl. pt.
+    (movl (deref (+ (- extendedtag) (* 2 wordsize)) eax) ebx) ; ret. addr.
+    (movl (imm nil-val) eax) ; clear eax
+    (jmp (unref-call ebx)))
+  1 nil)
 
 (def compile (stream-in stream-out program-p transform-fn)
   (with (e (cons 'do (readall stream-in))

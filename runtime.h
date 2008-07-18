@@ -39,8 +39,9 @@
 
 #define float_tag 0xCF
 
-#define continuation_tag 0x8F
+#define continuation_tag 0xAF
 #define continuation_stack_len_offset (-extended_tag+wordsize)
+
 #define frame_sentinel 0xFF
 
 #define broken_heart_tag 0x8F
