@@ -306,3 +306,6 @@
                                    out-name " 2>err")) 0)
         (__load (make-string out-name ".so"))
         (err "Compilation error: see file err")))))
+
+(def ccc (f)
+  (__ccc (fn (cc) (f [__restore-continuation cc _]))))

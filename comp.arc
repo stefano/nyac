@@ -1381,9 +1381,13 @@
 
 (def emit-setq (si env expr)
   (emit-expr si env (setq-val expr))
-  (let i (lookup env (setq-var expr))
+  (emit-set-from-previous si env (setq-var expr)))
+
+(def emit-set-from-previous (si env var-name)
+  ; set a variable with the value currently in eax
+  (let i (lookup env var-name)
     (if (not i)
-      (err (str-append "Variable not found: " (to-string (setq-var expr)))))
+      (err (make-string "Variable not found: " var-name)))
     (if (localp i) (emit-save i eax)
         (constp i) (movl eax i)
         (closedp i) (err "Cannot set closed var, use a cons instead")
@@ -1780,14 +1784,22 @@
   (emit-expr si env (funcall-closure expr))
   (emit-is-closure si env)
   (emit-save si eax) ; save closure
+  (emit-funcall-real si env (fn (si env)
+                              (emit-funcall-a si env (funcall-args expr)))
+                     (len (funcall-args expr)) tail apply-p))
+
+(def emit-funcall-real (si env args-generator n-args tail apply-p)
+  ; emit code for calling function in si(%esp) and use args-generator
+  ; to emit code to pass the arguments
   ; clear space reserved for frame-sentinel and ret. adress
   (emit-save (next-si si) (imm 0))
   (emit-save (next-si-n si 2) (imm 0))
   ; leave space for previous closure pointer, 
   ; for frame-sentinel and for return adress
-  (emit-funcall-a (next-si-n si 3) env (funcall-args expr))
+  ;(emit-funcall-a (next-si-n si 3) env (funcall-args expr))
+  (args-generator (next-si-n si 3) env)
   (let last-si (- si (+ (* 2 wordsize) 
-			(* wordsize (len (funcall-args expr)))))
+			(* wordsize n-args)));(len (funcall-args expr)))))
     (if tail
 	(do
 	  (emit-load si edi)
@@ -1795,9 +1807,9 @@
 	  (if apply-p
 	    (do
               (emit-unrolled-arg 
-                (- (* wordsize (len (funcall-args expr)))) env)
-	      (addl (imm (- (len (funcall-args expr)) 1)) eax))
-            (movl (imm (len (funcall-args expr))) eax)) 
+                (- (* wordsize n-args)) env);(len (funcall-args expr)))) env)
+	      (addl (imm (- n-args 1)) eax));(len (funcall-args expr)) 1)) eax))
+            (movl (imm n-args) eax));(len (funcall-args expr))) eax)) 
 	  (jmp (unref-call (deref closureaddr-offset edi))))
 	(do
 	  ; set callee closure pointer and save caller closure pointer
@@ -1809,8 +1821,8 @@
 	  (if apply-p
             (do
               (emit-unrolled-arg last-si env)
-	      (addl (imm (- (len (funcall-args expr)) 1)) eax))
-            (movl (imm (len (funcall-args expr))) eax))
+	      (addl (imm (- n-args 1)) eax));(len (funcall-args expr)) 1)) eax))
+            (movl (imm n-args) eax));(len (funcall-args expr))) eax))
 	  ; adjust %esp, si is negative
 	  (addl (imm (next-si si)) esp)
 	  (call (unref-call (deref closureaddr-offset edi)))
@@ -1827,6 +1839,41 @@
 
 (def emit-tail-apply (si env expr)
   (emit-funcall si env expr t t))
+
+; __ccc form
+; (__ccc one-arg-function)
+
+(def ccc-p (expr)
+  (and (consp expr) (is (car expr) '__ccc)
+       (if (is (len expr) 2) 
+         t
+         (err (make-string "Wrong number of arguments to " expr)))))
+
+(def ccc-fn (expr)
+  (cadr expr))
+
+(def emit-ccc (si env expr tail)
+  (let ret-label (unique-label)
+    ; build the continuation
+    (emit-call-stack-copy-rev si)
+    (movl (imm continuation-tag) (deref 0 eax))
+    (movl main-stack-base ebx)
+    (subl esp ebx) ; calculate stack len
+    (subl (imm si) ebx)
+    (movl ebx (deref wordsize eax))
+    (movl (imm ret-label) (deref (* 2 wordsize) eax)) ; ret. adress
+    (movl esp (deref (* 3 wordsize) eax))
+    (movl edi (deref (* 4 wordsize) eax))
+    (op-orl (imm extendedtag) eax)
+    (emit-save si eax) ; save continuation
+    (emit-expr (next-si si) env (ccc-fn expr))
+    (emit-is-closure (next-si si) env)
+    (emit-load si ebx)
+    (emit-save si eax) ; put function in si(%esp)
+    (emit-funcall-real si env (fn (si env) (emit-save si ebx)) 1 tail nil)
+    (label ret-label)
+    (if tail
+      (emit-fun-ret))))
 
 ; do form
 ; sequentially executes instructions
@@ -1918,6 +1965,7 @@
     (closurep expr) (emit-tail-closure si env expr)
     (labelcall-p expr) (emit-tail-labelcall si env expr)
     (funcallp expr) (emit-tail-funcall si env expr)
+    (ccc-p expr) (emit-ccc si env expr t)
     (apply-p expr) (emit-tail-apply si env expr)
     (do-p expr) (emit-tail-do si env expr)
     (ffi-p expr) (emit-ffi-call si env expr t)
@@ -1934,6 +1982,7 @@
     (closurep expr) (emit-closure si env expr)
     (labelcall-p expr) (emit-labelcall si env expr nil)
     (funcallp expr) (emit-funcall si env expr nil nil)
+    (ccc-p expr) (emit-ccc si env expr nil)
     (apply-p expr) (emit-apply si env expr)
     (do-p expr) (emit-do si env expr nil)
     (ffi-p expr) (emit-ffi-call si env expr nil)
@@ -1975,7 +2024,7 @@
 (def syntax-form-p (e)
   (and (consp e) (some (fn (x) (x e)) 
 		       (list labelsp primcallp setq-p letp closurep 
-			     ffi-p funcallp apply-p labelcall-p 
+			     ffi-p ccc-p funcallp apply-p labelcall-p 
 			     do-p ifp lambdap quotep))))
 
 (def emit-unit (expr env transformation)
@@ -2096,33 +2145,22 @@
 ; | wordsize | wordsize          | wordsize   | w.size | w. size | ... 
 ; -----------------------------------------------------------------------
 
-(install-primop '__save-continuation 
-  (fn (si env)
-    (let ret-label (unique-label)
-      (emit-call-stack-copy-rev si)
-      (movl (imm continuation-tag) (deref 0 eax))
-      (movl main-stack-base ebx)
-      (subl esp ebx) ; calculate stack len
-      (subl (imm si) ebx)
-      (movl ebx (deref wordsize eax))
-      (movl (imm ret-label) (deref (* 2 wordsize) eax)) ; ret. adress
-      (movl esp (deref (* 3 wordsize) eax))
-      (movl edi (deref (* 4 wordsize) eax))
-      (op-orl (imm extendedtag) eax)
-      (label ret-label)))
-  0 nil)
-
 (install-primop '__restore-continuation
-  (fn (si env expr)
-    (emit-expr si env expr)
+  (fn (si env cont-expr value)
+    (emit-expr si env cont-expr)
     (emit-extended-type-check si env continuation-tag)
+    (emit-save si eax)
+    (emit-expr (next-si si) env value)
+    (movl eax edi) ; save value to return from continuation
+    (emit-load si eax) ; get back continuation
     (emit-restore-stack)
     (movl (deref (+ (- extendedtag) (* 3 wordsize)) eax) esp) ; restore esp
+    (movl edi ecx)
     (movl (deref (+ (- extendedtag) (* 4 wordsize)) eax) edi) ; restore cl. pt.
     (movl (deref (+ (- extendedtag) (* 2 wordsize)) eax) ebx) ; ret. addr.
-    (movl (imm nil-val) eax) ; clear eax
+    (movl ecx eax) ; return the value
     (jmp (unref-call ebx)))
-  1 nil)
+  2 nil)
 
 (def compile (stream-in stream-out program-p transform-fn)
   (with (e (cons 'do (readall stream-in))

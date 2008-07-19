@@ -200,7 +200,7 @@
 
 (def builtin-global-p (s)
   (or (mem s (list if-sym let-sym 'do 'ffi-call 
-		   setq-sym 'funcall 'apply lambda-sym 'intern))
+		   setq-sym 'funcall 'apply '__ccc lambda-sym 'intern))
       (primitivep s)))
 
 (def mark-vars (expr)

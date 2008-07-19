@@ -331,14 +331,14 @@ char* stack_copy_rev(ptr* stack_top)
   stack_top++; /* to skip saving edi in continuation */
   ptr *ret = main_expand_heap2(stack_top-1, 
 			       5*wordsize+((unsigned int)main_stack_base-(unsigned int)stack_top));
-  printf("allocating %d bytes\n", 5*wordsize+((unsigned int)main_stack_base)-(unsigned int)stack_top);
+  //printf("allocating %d bytes\n", 5*wordsize+((unsigned int)main_stack_base)-(unsigned int)stack_top);
   ptr *dest = ret + 5;
   ptr *src = main_stack_base-1;
   //  stack_top++;
   //  printf("here\n");
   while (src!=stack_top)
     {
-      printf("about to copy: %x\n", *src);
+      //      printf("about to copy: %x\n", *src);
       //print_ptr(*src);
       //printf("\n");
       *dest++ = *src--;
