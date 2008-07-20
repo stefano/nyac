@@ -229,8 +229,8 @@
 (def unref (offset reg dest)
   (emit "    movl " offset "(" reg "), "  dest))
 
-(def mov (from to)
-  (emit "    mov " from ", " to))
+(def movb (from to)
+  (emit "    movb " from ", " to))
 
 (def movl (from to)
   (emit "    movl " from ", " to))
@@ -324,6 +324,7 @@
 
 (def emit-call-expand-heap (si . size)
   ; expects number of bytes to allocate in %eax if size is nil
+  ; address of allocated memory will be in %eax
   (let size (car size)
     (emit-save si edi) ; do not collect cl. pt!
     (let si (next-si si)
@@ -336,9 +337,9 @@
       (addl (imm (next-si si)) esp)
       ;(addl (imm (next-si-n si 2)) esp)
       (call "main_expand_heap2")
-      (subl (imm (next-si si)) esp)
+      (subl (imm (next-si si)) esp))
       ;(subl (imm (next-si-n si 2)) esp)
-      (movl eax ebp))
+      ;(movl eax ebp))
     (emit-load si edi)))
 
 ; runtime global memory area holding the base of the current stack
@@ -659,8 +660,8 @@
 
 (def emit-build-cons ()
   ; saves current %ebp pointer in %eax, marks it as a cons cell and bumps %ebp
-  (movl ebp eax)
-  (addl (imm cell-size) ebp)
+  ;(movl ebp eax)
+  ;(addl (imm cell-size) ebp)
   (op-orl (imm celltag) eax))
 
 (def op-cons (si env the-car the-cdr)
@@ -669,10 +670,10 @@
   (emit-expr (next-si si) env the-cdr)
   (movl eax (deref (next-si si) esp))
   (emit-call-expand-heap (next-si-n si 2) (* 2 wordsize))
-  (movl (deref (next-si si) esp) eax)
-  (movl eax (deref wordsize ebp))
-  (movl (deref si esp) eax)
-  (movl eax (deref 0 ebp))
+  (movl (deref (next-si si) esp) ebx)
+  (movl ebx (deref wordsize eax))
+  (movl (deref si esp) ebx)
+  (movl ebx (deref 0 eax))
   (emit-build-cons))
 
 (install-primop 'cons op-cons 2 nil)
@@ -700,15 +701,17 @@
 ; a symbol has three values: a string, a value, a plist
 (def op-mksymbol (si env string-expr)
   (emit-expr si env string-expr)
+  (emit-is-str si env)
   (emit-save si eax)
   (emit-call-expand-heap (next-si si) (* 4 wordsize))
-  (emit-load si eax)
-  (emit-is-str si env)
-  (movl eax (deref 0 ebp))
-  (movl (imm unbound-val) (deref wordsize ebp))
-  (movl (imm nil-val) (deref (* 2 wordsize) ebp))
-  (movl ebp eax)
-  (addl (imm (* 4 wordsize)) ebp) ; round at 8 byte boundaries
+  ;(movl eax ebp)
+  (emit-load si ebx);eax)
+  ;(emit-is-str si env)
+  (movl ebx (deref 0 eax))
+  (movl (imm unbound-val) (deref wordsize eax))
+  (movl (imm nil-val) (deref (* 2 wordsize) eax))
+  ;(movl ebp eax)
+  ;(addl (imm (* 4 wordsize)) ebp) ; round at 8 byte boundaries
   (op-orl (imm symboltag) eax))
 
 (install-primop 'mksymbol op-mksymbol 1 nil)
@@ -790,9 +793,10 @@
   (andl (imm (- (* 2 wordsize))) eax)
   (emit-save (next-si si) eax) ; save size
   (emit-call-expand-heap (- si (* 3 wordsize)))
-  (emit-load si eax)
-  (movl eax (deref 0 ebp)) ; set length field
-  (movl ebp eax)
+  (emit-load si ebx)
+  (movl ebx (deref 0 eax)) ; set length field
+  ;(movl ebp eax)
+  (movl eax ebp)
   (emit-load (next-si si) ebx) ; get back size
   ; loop to init all elements to the value of elem
   (with (loop-label (unique-label)
@@ -884,14 +888,14 @@
     (shrl (imm fxshift) ebx)
     (addl (imm (+ wordsize (- (* 2 wordsize) 1))) ebx)
     (andl (imm (- (* 2 wordsize))) ebx)
-    (emit-save (next-si si) ebx) ; save size
+    ;(emit-save (next-si si) ebx) ; save size
     (movl ebx eax)
-    (emit-call-expand-heap (next-si-n si 2))
+    (emit-call-expand-heap (next-si-n si 1))
     (emit-load si ebx)
-    (movl ebx (deref 0 ebp)) ; put length in its field
-    (movl ebp eax)
-    (emit-load (next-si si) ebx)
-    (addl ebx ebp)
+    (movl ebx (deref 0 eax)) ; put length in its field
+    ;(movl ebp eax)
+    ;(emit-load (next-si si) ebx)
+    ;(addl ebx ebp)
     (op-orl (imm extendedtag) eax)) 
   1 nil)
 
@@ -910,7 +914,7 @@
     (emit-load si ebx) ; get string adress
     (shrl (imm fxshift) (deref (next-si si) esp)) ; 1-byte
     (addl (deref (next-si si) esp) ebx) ; sum offset
-    (mov al (deref (+ wordsize (- extendedtag)) ebx)) ; set value
+    (movb al (deref (+ wordsize (- extendedtag)) ebx)) ; set value
     (shll (imm chshift) eax) ; return orginal char value
     (op-orl (imm chtag) eax))
   3 nil)
@@ -926,7 +930,7 @@
     (emit-load si ebx) ; get string adress
     (shrl (imm fxshift) eax) ; 1-byte
     (addl eax ebx) ; sum offset
-    (mov (deref (+ wordsize (- extendedtag)) ebx) al) ; get value
+    (movb (deref (+ wordsize (- extendedtag)) ebx) al) ; get value
     (movzbl al eax)
     (shll (imm chshift) eax)
     (op-orl (imm chtag) eax))
@@ -958,19 +962,22 @@
 (def op-string-aux (si env i chars)
   (if chars
     (do
-      (emit-expr (next-si si) env (car chars))
-      (emit-is-ch (next-si si) env)
-      (emit-load si ebx)
-      (shrl (imm chshift) eax) ; remove char tag
-      (mov al (deref (+ wordsize (- i extendedtag)) ebx))
+      ;(emit-expr (next-si si) env (car chars))
+      ;(emit-is-ch (next-si si) env)
+      ;(emit-load si ebx)
+      ;(shrl (imm chshift) eax) ; remove char tag
+      ;(mov al (deref (+ wordsize (- i extendedtag)) ebx))
+      (movb (imm (char->fx (car chars))) (deref (+ wordsize (- i extendedtag)) eax))
       (op-string-aux si env (+ i 1) (cdr chars)))))
 
 (install-primop 'string 
   (fn (si env . chars)
+    (if (some [not (charp _)] chars)
+      (err (make-string "Error: string accepts only immediate characters: " chars)))
     ((emitter 'mkstr) si env (len chars))
-    (emit-save si eax)
-    (op-string-aux si env 0 chars)
-    (emit-load si eax))
+    ;(emit-save si eax)
+    (op-string-aux si env 0 chars))
+    ;(emit-load si eax))
   0 t)
 
 (install-primop '__float-init 
@@ -989,11 +996,11 @@
 (def emit-build-float (si)
   ; takes double float from float register stack
   (emit-call-expand-heap si (* 4 wordsize))
-  (movl (imm floattag) (deref 0 ebp))
-  (fstpl (deref wordsize ebp))
-  (movl ebp eax)
-  (op-orl (imm extendedtag) eax)
-  (addl (imm (* 4 wordsize)) ebp))
+  (movl (imm floattag) (deref 0 eax))
+  (fstpl (deref wordsize eax))
+  ;(movl ebp eax)
+  (op-orl (imm extendedtag) eax))
+  ;(addl (imm (* 4 wordsize)) ebp))
 
 (def emit-fl-cmp (si env arg1 arg2 setter)
   (emit-expr si env arg1)
@@ -1555,6 +1562,7 @@
   (emit-save rest-si eax)
   (shll (imm 1) eax)
   (emit-call-expand-heap (next-si rest-si))
+  (movl eax ebp)
   (emit-load rest-si eax)
   (movl esp edx)
   (addl eax esp)
@@ -1574,9 +1582,12 @@
     (movl ebx (deref wordsize ebp)) ; saves %ebx in cdr part
     (movl (deref 0 edx) ebx)
     (movl ebx (deref 0 ebp)) ; saves current stack pos in car part
-    (emit-build-cons)
+    ;(emit-build-cons)
+    (movl ebp ebx) ; saves current cons in ebx
+    (op-orl (imm celltag) ebx) ; tag it
+    (addl (imm (* 2 wordsize)) ebp) ; go to next cell
     ;(emit "    addl $~a, %ebp" cell-size)
-    (movl eax ebx) ; saves current cons
+    ;(movl eax ebx) ; saves current cons
     (addl (imm wordsize) edx) ; next index
     (jmp loop-start)
     (label loop-end)
@@ -1697,6 +1708,10 @@
   (if vals
     (do
       (emit-expr si env (car vals))
+      ; !!! WARNING: vals expressions must not touch the ebp register   !!!
+      ; !!! compiler generated code respect this, but not user code     !!!
+      ; !!! or this function has to change or user shouldn't be able to !!!
+      ; !!! use the (closure ...) form                                  !!!
       (movl eax (deref ci ebp))
       (emit-closure-vals si env (+ ci wordsize) (cdr vals)))))
 
@@ -1710,6 +1725,7 @@
     ;(emit "    movl %eax, ~a(%esp)" si)
     (emit-call-expand-heap (next-si si) 
                            (round-at-boundary size (* 2 wordsize)))
+    (movl eax ebp)
     (movl (imm (lookup env label)) 
           (deref (+ closuretag closureaddr-offset) ebp)) ; address
     (movl (imm (imm-rep (+ (len vals) 1))) 
@@ -1718,10 +1734,10 @@
     (movl eax (deref (* 2 wordsize) ebp)) ; save closure name
     (emit-closure-vals si env (* 3 wordsize) vals)
     (movl ebp eax)
-    (op-orl (imm closuretag) eax)
+    (op-orl (imm closuretag) eax)))
     ; increase heap index and round at 8-byte boundaries
-    (addl (imm (+ size (- (* 2 wordsize) 1))) ebp)
-    (andl (imm (- (* 2 wordsize))) ebp)))
+    ;(addl (imm (+ size (- (* 2 wordsize) 1))) ebp)
+    ;(andl (imm (- (* 2 wordsize))) ebp)))
 
 (def emit-unrolled-arg (si env)
   ; emit code to unroll current stack location (wich must be a list) into the 
@@ -2072,13 +2088,13 @@
 (def emit-static-routines ()
   ; emit code for static routines
   ; these routines expect return adress in ecx
-  (emit-static-type-check-routine "extended" basicmask extendedtag)
-  (emit-static-type-check-routine "fx" fxmask fxtag)
-  (emit-static-type-check-routine "ch" chmask chtag)
-  (emit-static-type-check-routine "cell" cellmask celltag)
-  (emit-static-type-check-routine "vec" vecmask vectag)
-  (emit-static-type-check-routine "sym" symbolmask symboltag)
-  (emit-static-type-check-routine "closure" closuremask closuretag)
+  ;(emit-static-type-check-routine "extended" basicmask extendedtag)
+  ;(emit-static-type-check-routine "fx" fxmask fxtag)
+  ;(emit-static-type-check-routine "ch" chmask chtag)
+  ;(emit-static-type-check-routine "cell" cellmask celltag)
+  ;(emit-static-type-check-routine "vec" vecmask vectag)
+  ;(emit-static-type-check-routine "sym" symbolmask symboltag)
+  ;(emit-static-type-check-routine "closure" closuremask closuretag)
   ; function call (with exactly one arg) expects:
   ; argument in eax
   ; closure in ebx

@@ -24,7 +24,7 @@
       (is c #\;) (do
                    (skip-line stream)
                    (read/tbl stream read-table))
-      (err (str-append "Unknown char: " (string c))))))
+      (err (str-append "Unknown char: " (char->str c))))))
 
 (def read-symbol (s tbl)
   (with (l nil

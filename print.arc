@@ -29,7 +29,11 @@
         (c-fill str i (fxsub1 (str-len str))))))
 
 (def char->str (c)
-  (string #\# #\\ c))
+  (let s (mkstr 3)
+    (str-set s 0 #\#)
+    (str-set s 1 #\\)
+    (str-set s 2 c)
+    s))
 
 (def list->str-a (l)
   (if 
