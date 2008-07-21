@@ -2085,8 +2085,24 @@
       (jmp (unref-call (deref 0 ecx))))
     (emit-funcall si env expr tail apply-p)))
 
+(def emit-thread-trampoline ()
+  (emit-fun-header "thread_trampoline")
+  (emit-load (- wordsize) eax) ; get thread argument
+  (movl (deref 0 eax) edi) ; get closure to call
+  (movl (deref wordsize eax) esp) ; set new stack
+  (movl esp main-stack-base)
+  ; call the closure
+  (movl (imm 0) eax)
+  (emit-save (- wordsize) (imm nil-val))
+  (emit-save (- (* 2 wordsize)) (imm frame-sentinel))
+  (addl (- (* 2 wordsize)) esp)
+  (call (unref-call (deref closureaddr-offset edi)))
+  (subl (- (* 2 wordsize)) esp)
+  (emit-fun-ret))
+
 (def emit-static-routines ()
   ; emit code for static routines
+  ;(emit-thread-trampoline)
   ; these routines expect return adress in ecx
   ;(emit-static-type-check-routine "extended" basicmask extendedtag)
   ;(emit-static-type-check-routine "fx" fxmask fxtag)

@@ -25,6 +25,15 @@ void test_mem(char *mem, unsigned int n, int content)
       }
 }
 
+/*
+  stack list used to hold stacks managed by GC
+*/
+typedef struct _stack_list
+{
+  ptr *stack;
+  struct _stack_list *next;
+} stack_list;
+
 typedef struct _gc
 {
   char *heap1; /* heap to be copied */
@@ -37,9 +46,46 @@ typedef struct _gc
   unsigned int heap2_top;
 
   ptr *stack; /* stack pointer */
+  stack_list *sl; /* list of stacks to use as roots */
 
   unsigned int next_alloc_size; /* size of the next heap */
 } gc;
+
+/*
+  add a stack to be managed by GC
+*/
+void gc_add_stack(gc *g, ptr *stack)
+{
+  stack_list *sl = malloc(sizeof(stack_list));
+  sl->stack = stack;
+  sl->next = g->sl;
+  g->sl = sl;
+}
+
+/*
+  remove a stack from GC's list
+*/
+void gc_rm_stack(gc *g, ptr *stack)
+{
+  stack_list *sl = g->sl;
+  stack_list *prev = 0;
+  for (; sl!=0 && sl->next!=0 && sl->stack!=stack;)
+    {
+      prev = sl;
+      sl = sl->next;
+    }
+  if (!sl)
+    {
+      printf("GC error: asked to remove an unknown stack\n");
+      exit(1);
+    }
+  if (prev==0)
+    g->sl = sl->next;
+  else
+    prev->next = sl->next;
+  deallocate_protected_space((char*)(sl->stack), STACK_SIZE);
+  free(sl);
+}
 
 char* gc_init(gc *g, char *stack)//, char *croots)
 {
@@ -51,6 +97,8 @@ char* gc_init(gc *g, char *stack)//, char *croots)
   g->heap2_size = 0;
   //  g->heap2_start = 0;
   g->heap2_top = 0;
+  //g->sl = 0;
+  //gc_add_stack(g, stack);
   g->stack = (ptr*)stack;
   //g->stack_top = 0;
   //g->croots = croots;

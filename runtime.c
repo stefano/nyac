@@ -348,14 +348,17 @@ char* stack_copy_rev(ptr* stack_top)
 }
 
 /*
-  takes a stack saved in the heap and overwrites with it the current stack
-  len is in bytes
+  runs a thread that executes function
 */
-void restore_stack_from(ptr *from, unsigned int len)
+/*
+void run_thread(ptr function)
 {
-  ptr *dest = main_stack_base;
-  ptr *end = ((char*)dest)-len;
-  while (dest!=end)
-    *dest-- = *from++; /* !!! this modifies the same stack where the return 
-			  address of this function is saved !!! */
+  pthread_t t;
+  ptr *new_stack = allocate_protected_space(16 * 4096);
+  gc_add_stack(new_stack);
+  ptr *args = malloc(sizeof(ptr)*2);
+  args[0] = function;
+  args[1] = new_stack;
+  pthread_create(&t, NULL, &__thread_trampoline, (void*)args);
 }
+*/

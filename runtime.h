@@ -8,6 +8,8 @@
 
 #define wordsize 4
 
+#define STACK_SIZE (1600 * 4096)
+
 #define nil_val 0x2F
 #define t_val 0x6F
 
