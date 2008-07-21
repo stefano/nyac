@@ -345,27 +345,27 @@
 ; runtime global memory area holding the base of the current stack
 (set main-stack-base "main_stack_base")
 
-(def emit-stack-copy-rev (si)
+;(def emit-stack-copy-rev (si)
   ; emit code to copy the stack up to si (exclusive) into the heap
   ; the stack grows downwards and the heap upwards, so it is copied in 
   ; reverse order
   ; space on the heap must be allocated and memory pointer must be in %ebp
   ; ebx: source pointer
   ; ebp: target pointer
-  (movl main-stack-base ebx)
-  (addl (imm si) esp) ; esp: first adress not to copy
-  (with (loop-start (unique-label)
-         end (unique-label))
-    (label loop-start)
-    (cmp ebx esp)
-    (je end)
-    (movl (deref 0 ebx) ecx) ; copy wordsize bytes
-    (movl ecx (deref 0 ebp))
-    (addl (imm wordsize) ebp) ; next target adress
-    (addl (imm (- wordsize)) ebx) ; next source adress
-    (jmp loop-start)
-    (label loop-end))
-  (subl (imm si) esp)) ; restore esp
+;  (movl main-stack-base ebx)
+;  (addl (imm si) esp) ; esp: first adress not to copy
+;  (with (loop-start (unique-label)
+;         end (unique-label))
+;    (label loop-start)
+;    (cmp ebx esp)
+;    (je end)
+;    (movl (deref 0 ebx) ecx) ; copy wordsize bytes
+;    (movl ecx (deref 0 ebp))
+;    (addl (imm wordsize) ebp) ; next target adress
+;    (addl (imm (- wordsize)) ebx) ; next source adress
+;    (jmp loop-start)
+;    (label loop-end))
+;  (subl (imm si) esp)) ; restore esp
 
 (def emit-restore-stack ()
   ; emit code to copy back the stack from the heap to main_stack_base
@@ -426,23 +426,22 @@
     (sal (imm bool-bit) al)
     (op-or (imm nil-val) al)))
 
-(def emit-type-check (si env mask tag)
+(def emit-type-check (si env name);mask tag)
   ; emit code fore checking type of value in %eax
-  (movl eax ebx)
-  (op-and (imm mask) ebx)
-  (cmp (imm tag) ebx)
-  (let cont-label (unique-label)
-    (je cont-label)
-    (movl (imm 0) eax)
-    (addl (imm si) esp)
-    (jmp '__type_error)
-;    (movl (imm cont-label) ecx)
-;    (movl (imm si) edx)
-;    (jmp (make-string "__check_" name))
-    (label cont-label)))
+  ;(movl eax ebx)
+  ;(op-and (imm mask) ebx)
+  ;(cmp (imm tag) ebx)
+  ;(let cont-label (unique-label)
+  ;  (je cont-label)
+  ;  (movl (imm 0) eax)
+  ;  (addl (imm si) esp)
+  ;  (jmp '__type_error)
+  ;  (label cont-label)))
+  (addl (imm si) esp)
+  (call (make-string "__check_" name))
+  (subl (imm si) esp))
 
 (def emit-static-type-check-routine (name mask tag)
-  ; expect ret address in ecx, si in edx
   (decl-globl (make-string "__check_" name))
   (emit-fun-header (make-string "__check_" name))
   (movl eax ebx)
@@ -450,15 +449,14 @@
   (cmp (imm tag) ebx)
   (let err-label (unique-label)
     (jne err-label)
-    (jmp (unref-call (deref 0 ecx)))
+    (emit-fun-ret)
     (label err-label)
     (movl (imm 0) eax)
-    (addl edx esp)
     (jmp '__type_error)))
 
 (def emit-extended-type-check (si env tag . mask)
   (let mask (car mask)
-    (emit-type-check si env basicmask extendedtag)
+    (emit-type-check si env "extended"); basicmask extendedtag)
     (movl (deref (- extendedtag) eax) ebx)
     (if mask
       (op-and (imm mask) ebx))
@@ -475,16 +473,16 @@
       (label cont-label))))
 
 (def emit-is-fx (si env)
-  (emit-type-check si env fxmask fxtag))
+  (emit-type-check si env "fx"));fxmask fxtag))
 
 (def emit-is-ch (si env)
-  (emit-type-check si env chmask chtag))
+  (emit-type-check si env "ch"));chmask chtag))
 
 (def emit-is-cell (si env)
-  (emit-type-check si env cellmask celltag))
+  (emit-type-check si env "cell"));cellmask celltag))
 
 (def emit-is-vec (si env)
-  (emit-type-check si env vecmask vectag))
+  (emit-type-check si env "vec"));vecmask vectag))
 
 (def emit-is-str (si env)
   (emit-extended-type-check si env strtag fxmask))
@@ -493,10 +491,10 @@
   (emit-extended-type-check si env floattag))
 
 (def emit-is-sym (si env)
-  (emit-type-check si env symbolmask symboltag))
+  (emit-type-check si env "sym"));symbolmask symboltag))
 
 (def emit-is-closure (si env)
-  (emit-type-check si env closuremask closuretag))
+  (emit-type-check si env "closure"));closuremask closuretag))
 
 (def emit-exact-arg-count-check (si env n)
   (with (error-label (unique-label)
@@ -821,7 +819,7 @@
   (emit-is-vec si env)
   (emit-save si eax)
   (emit-expr (next-si si) env arg2)
-  (emit-is-fx si env)
+  (emit-is-fx (next-si si) env)
   (emit-bounds-check si vectag)
   (emit-save (next-si si) eax)
   (emit-expr (next-si-n si 2) env arg3)
@@ -905,11 +903,11 @@
     (emit-is-str si env)
     (emit-save si eax)
     (emit-expr (next-si si) env arg2)
-    (emit-is-fx si env)
+    (emit-is-fx (next-si si) env)
     (emit-bounds-check si extendedtag)
     (emit-save (next-si si) eax)
     (emit-expr (next-si-n si 2) env arg3)
-    (emit-is-ch si env)
+    (emit-is-ch (next-si-n si 2) env)
     (shrl (imm chshift) eax) ; remove char tag
     (emit-load si ebx) ; get string adress
     (shrl (imm fxshift) (deref (next-si si) esp)) ; 1-byte
@@ -1103,7 +1101,7 @@
   (emit-is-fx si env)
   (emit-save si eax)
   (emit-expr (next-si si) env arg2)
-  (emit-is-fx si env)
+  (emit-is-fx (next-si si) env)
   (if (is order 'rev)
     (do
       (op eax (deref si esp))
@@ -1126,7 +1124,7 @@
     (emit-is-fx si env)
     (emit-save si eax)
     (emit-expr (next-si si) env arg2)
-    (emit-is-fx si env)
+    (emit-is-fx (next-si si) env)
     (sarl (imm fxshift) eax)
     (imull (deref si esp) eax))
   2 nil)
@@ -1137,7 +1135,7 @@
     (emit-is-fx si env)
     (emit-save si eax)
     (emit-expr (next-si si) env arg2)
-    (emit-is-fx si env) ; TODO: add zero check
+    (emit-is-fx (next-si si) env) ; TODO: add zero check
     (movl eax ebx)
     (emit-load si eax)
     (cdq) ; sign extends dividend, idiv divides EDX:EAX
@@ -1152,7 +1150,7 @@
     (emit-is-fx si env)
     (emit-save si eax)
     (emit-expr (next-si si) env arg2)
-    (emit-is-fx si env) ; TODO: add zero check
+    (emit-is-fx (next-si si) env) ; TODO: add zero check
     (movl eax ebx)
     (emit-load si eax)
     (cdq) ; sign extends dividend, idiv divides EDX:EAX
@@ -1753,7 +1751,10 @@
     (label loop-start)
     (cmp (imm (imm-rep nil)) eax) ; end of list?
     (je loop-end)
-    (emit-is-cell si env) ; must be a cons
+    (movl esp ebp)
+    (movl edx esp)
+    (emit-is-cell (- wordsize) env) ; must be a cons
+    (movl ebp esp)
     (movl (deref car-offset eax) ebx) ; takes the car
     (movl ebx (deref 0 edx)) ; puts it into the stack
     (subl (imm wordsize) edx) ; next stack location
@@ -2104,13 +2105,13 @@
   ; emit code for static routines
   ;(emit-thread-trampoline)
   ; these routines expect return adress in ecx
-  ;(emit-static-type-check-routine "extended" basicmask extendedtag)
-  ;(emit-static-type-check-routine "fx" fxmask fxtag)
-  ;(emit-static-type-check-routine "ch" chmask chtag)
-  ;(emit-static-type-check-routine "cell" cellmask celltag)
-  ;(emit-static-type-check-routine "vec" vecmask vectag)
-  ;(emit-static-type-check-routine "sym" symbolmask symboltag)
-  ;(emit-static-type-check-routine "closure" closuremask closuretag)
+  (emit-static-type-check-routine "extended" basicmask extendedtag)
+  (emit-static-type-check-routine "fx" fxmask fxtag)
+  (emit-static-type-check-routine "ch" chmask chtag)
+  (emit-static-type-check-routine "cell" cellmask celltag)
+  (emit-static-type-check-routine "vec" vecmask vectag)
+  (emit-static-type-check-routine "sym" symbolmask symboltag)
+  (emit-static-type-check-routine "closure" closuremask closuretag)
   ; function call (with exactly one arg) expects:
   ; argument in eax
   ; closure in ebx
@@ -2198,8 +2199,8 @@
   (with (e (cons 'do (readall stream-in))
          old stdout*)
     (set stdout* stream-out)
-    ;(if (is transform-fn minimal-transform)
-    ;  (emit-static-routines))
+    (if (is transform-fn minimal-transform)
+      (emit-static-routines))
     (emit-unit e (mk-empty-env) transform-fn)
     (if program-p
       (emit-program))
