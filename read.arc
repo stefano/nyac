@@ -232,3 +232,31 @@
 
 (def readall (in-stream)
   (read-list-with-ter in-stream read-table nil))
+
+(def do-splice (l before)
+  (if (and l (atom l)) l 
+      (not l) before
+      (consp (car l))
+        (if (is (caar l) 'tosplice)
+          (let res (list 'append before (do-splice (cadr (car l)) nil))
+	    (list 'append res (cons 'list (do-splice (cdr l) nil))))
+          (do-splice (cdr l) (append before (list (do-splice (car l) nil)))))
+      (do-splice (cdr l) (append before (list (car l))))))
+
+(def do-quasiquote (x level)
+  (if (is level 0) x
+      (atom x) (list 'quote x)
+      (and (is level 1) (is (car x) 'unquote)) 
+        (do-quasiquote (cadr x) (- level 1))
+      (is (car x) 'unquote) 
+        (list 'unquote (do-quasiquote (cadr x) (- level 1)))
+      (and (is level 1) (is (car x) 'splice))
+        (list 'tosplice (do-quasiquote (cadr x) (- level 1)))
+      (is (car x) 'splice) 
+        (list 'splice (do-quasiquote (cadr x) (- level 1)))
+      (is (car x) 'quasiquote) 
+        (list 'quasiquote (do-quasiquote (cadr x) (+ level 1)))
+      (cons 'list (map [do-quasiquote _ level] x))))
+
+(mac quasiquote (l)
+  (do-splice (do-quasiquote l 1) nil))

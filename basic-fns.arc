@@ -10,6 +10,8 @@
 
 (set-symbol-value 'list (__fn elems elems))
 
+(set-symbol-value 'caar (__fn (l) (car (car l))))
+
 (set-symbol-value 'cadr (__fn (l) (car (cdr l))))
 
 (set-symbol-value 'caddr (__fn (l) (car (cdr (cdr l)))))
