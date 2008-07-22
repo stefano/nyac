@@ -111,6 +111,8 @@
     (atom a)
       (if (atom b) (is a b) nil)))
 
+(def acons (x) (consp x))
+
 (def not (x) (not x))
 
 (def symbolp (x) (symbolp x))
