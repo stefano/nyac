@@ -1401,6 +1401,7 @@
 
 (def mk-empty-env () 
   (list (cons 'intern (to-string 'intern))
+        (cons '__error_continuation (to-string '__error_continuation))
         (cons 't (imm (imm-rep t)))
         (cons 'nil (imm (imm-rep nil)))))
 
