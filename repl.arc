@@ -11,7 +11,12 @@
 (with (in (stdin-stream)
        out (stdout-stream))
   (def repl ()
-    (write-string "> " out)
+    (ccc [set __error_continuation
+             (fn (s)
+               (print (make-string "Error: " s))
+               ;(__print_backtrace)
+               (_ nil))])
+    (write-string "arc> " out)
     (print (eval (read/tbl in read-table)))
     (repl)))
 

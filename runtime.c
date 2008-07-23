@@ -110,13 +110,13 @@ void print_ptr(ptr x)
 	int i;
 	//printf("<contents: %p %d>", (char*)sym_ref(x, 0), str_len(sym_ref(x, 0)));
 	ptr s = sym_ref(x, 0);
-	printf("#<sym: ");
-	print_ptr(s);
+	//printf("#<sym: ");
+	//print_ptr(s);
 	//printf(", ");/* print_ptr(sym_ref(x, 1));*/ printf(", ");
 	//print_ptr(sym_ref(x, 2));
-	printf(">");
-	//for (i = 0; i<str_len(s); i++)
-	//printf("%c", str_ref(s, i));
+	//printf(">");
+	for (i = 0; i<str_len(s); i++)
+	  printf("%c", str_ref(s, i));
       }
       break;
     default:

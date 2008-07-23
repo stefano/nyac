@@ -451,6 +451,8 @@
     (jne err-label)
     (emit-fun-ret)
     (label err-label)
+    ; clear return address to avoid confusing __print_backtrace
+    (emit-save wordsize (imm 0))
     (movl (imm 0) eax)
     (jmp '__type_error)))
 

@@ -3,7 +3,12 @@
 
 (labels ((__error 
 	   (code (msg) ()
-	     (funcall __error_continuation msg)))
+             (__if __error_continuation
+	       (funcall __error_continuation msg)
+               (do ; default handler
+                 (ffi-call "a_write" 2 msg (str-len msg))
+	         (__print_backtrace)
+	         (ffi-call "exit" 1)))))
 
 	 (__type_error 
 	   (code () ()
@@ -70,14 +75,8 @@
 
 	 (intern (const (closure __intern "intern")))
 
-         (__print_and_exit
-           (code (msg) ()
-             (ffi-call "a_write" 2 msg (str-len msg))
-	     (__print_backtrace)
-	     (ffi-call "exit" 1)))
-         
          ; function called whenever an error occurs
          ; !! it _must_ never return because because error checking
          ; !! code emitted by the compiler makes direct jumps to the
          ; !! error label, so no return is possible.
-         (__error_continuation (const (closure __print_and_exit "__exit")))))
+         (__error_continuation (const nil))))

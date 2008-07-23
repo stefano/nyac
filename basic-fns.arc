@@ -1,12 +1,14 @@
-; functions needed by basic-macs.l
+; functions needed by basic-macs.arc
 
 (set-symbol-value 'err 
   (__fn (msg)
-    (do
-      (ffi-call "a_write" 1 msg (str-len msg))
-      (ffi-call "a_write" 1 "
+    (__if __error_continuation
+      (__error_continuation msg)
+      (do
+        (ffi-call "a_write" 1 msg (str-len msg))
+        (ffi-call "a_write" 1 "
 " 1)
-      (ffi-call "exit" 1))))
+        (ffi-call "exit" 1)))))
 
 (set-symbol-value 'list (__fn elems elems))
 
