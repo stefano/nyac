@@ -15,6 +15,11 @@
 
 #include "runtime.h"
 
+/* 
+   print_ptr won't print lists' or vectors' elements after PRINT_LIMIT position
+*/
+#define PRINT_LIMIT 10
+
 void print_ptr(ptr x)
 {
   //  printf("pr: %x\n", x);
@@ -33,15 +38,18 @@ void print_ptr(ptr x)
       break;
     case cell_tag:
       {
+	int count = 0;
 	ptr c;
 	printf("(");
-	for (c = x; basic_type(c)==cell_tag; c = cdr(c))
+	for (c = x; basic_type(c)==cell_tag && count<PRINT_LIMIT; c = cdr(c))
 	  {
 	    print_ptr(car(c));
 	    if (basic_type(cdr(c))==cell_tag)
 	      printf(" ");
+	    if (++count==PRINT_LIMIT)
+	      printf("...");
 	  }
-	if (c!=nil_val)
+	if (count<PRINT_LIMIT && c!=nil_val)
 	  {
 	    printf(" . ");
 	    print_ptr(c);
@@ -51,12 +59,15 @@ void print_ptr(ptr x)
       break;
     case vec_tag:
       {
+	int count = 0;
 	int i;
 	printf("#(");
-	for (i = 0; i<vec_len(x); i++)
+	for (i = 0; i<vec_len(x) && count<PRINT_LIMIT; i++)
 	  {
 	    print_ptr(vec_ref(x, i));
 	    printf(" ");
+	    if (++count==PRINT_LIMIT)
+	      printf("...");
 	  }
 	printf(")");
       }
@@ -64,17 +75,18 @@ void print_ptr(ptr x)
     case closure_tag:
       {
 	int i;
-	printf("#<function: ");
+	printf("#<function ");
 	print_ptr(closure_ref(x, 0));
+	/*
 	printf(", address %p, closes (", (void*)closure_ref(x, -1));
-	fflush(stdout);
 	for (i = 1; i<closure_len(x); i++)
 	  {
 	    print_ptr(closure_ref(x, i));
 	    if (i<closure_len(x)-1)
 	      printf(" ");
 	  }
-	printf(")>");
+	*/
+	printf(">");
       }
       break;
     case extended_tag:

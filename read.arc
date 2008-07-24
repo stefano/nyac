@@ -26,6 +26,20 @@
                    (read/tbl stream read-table))
       (err (str-append "Unknown char: " (char->str c))))))
 
+(def expand-ssyntax (str)
+  (let aux nil
+    (set aux (fn (pos)
+               (if (< pos (str-len str))
+                 (if (is (str-ref str pos) #\:)
+                   pos
+                   (aux (+ pos 1))))))
+    (let sep (aux 0)
+      (if sep
+        (list 'compose 
+              (intern (substr str 0 sep))
+              (expand-ssyntax (substr str (+ sep 1) (str-len str))))
+        (intern str)))))
+
 (def read-symbol (s tbl)
   (with (l nil
          c nil)
