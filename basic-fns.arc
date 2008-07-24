@@ -69,3 +69,32 @@
       (__if cell
         (setcdr cell fn)
         (set macros* (cons (cons name fn) macros*))))))
+
+(set list-ref 
+  (__fn (l n)
+    (__if (is n 0) (car l) (list-ref (cdr l) (fx- n 1)))))
+
+; split the argument list of a (fn (args) ...) form into two lists:
+; the first contains the first atomic symbols, the second the rest of 
+; the argument list
+(set split-arglist
+  (__fn (l acc)
+    (__if (symbolp l) ; arg list with rest parameter
+      (list (rev (cons l acc)) nil)
+      (__let ((arg (car l)))
+        (__if (__if (not l) t (consp arg))
+          (list (rev acc) l)
+          (split-arglist (cdr l) (cons arg acc)))))))
+
+; tells if l is a list ending with nil
+(set proper-list
+  (__fn (l)
+    (__if (not l) t (__if (consp l) (proper-list (cdr l)) nil))))
+
+; set the value of the last cdr in a list
+(set set-last-cdr!
+  (__fn (l val)
+    (__if l
+      (__if (consp (cdr l))
+        (set-last-cdr! (cdr l) val)
+        (setcdr l val)))))

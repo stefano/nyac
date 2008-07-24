@@ -10,6 +10,8 @@
                   (err "+: Wrong types"))
       (err "+: Wrong types")))
 
+; Warning: the current implementation of '-' is _very_ slow, because
+; it needs to cons its arguments
 (def - args
   (let l (len args)
     (if (is l 0) 0
@@ -311,3 +313,14 @@
 
 (def ccc (f)
   (__ccc (fn (cc) (f [__restore-continuation cc _]))))
+
+; compile and load a file
+(def load (file-name)
+  (withs (out-name (make-string "tmp/to-load-" (uniq) ".s")
+          so-name (make-string out-name ".so")
+          in-file (open-file file-name 'in)
+          out-file (open-file out-name 'out))
+    (compile in-file out-file nil transform-expr)
+    (if (is (system (make-string "gcc --shared -o " so-name " " out-name " 2>err")) 0)
+      (__load so-name)
+      (err "Compilation error: see file err"))))

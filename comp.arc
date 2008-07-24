@@ -530,11 +530,10 @@
 	 cont-label (unique-label))
     (cmp (imm unbound-val) eax)
     (jne cont-label)
-    (movl (imm 0) (deref si esp))
+    (movl (imm frame-sentinel) (deref si esp))
     (movl (imm 0) (deref (next-si si) esp))
     (movl ecx (deref (next-si-n si 2) esp))
     (movl (imm 1) eax)
-    (movl (imm frame-sentinel) (deref si esp))
     (addl (imm si) esp)
     (movl '__unbound_error_fun ecx)
     (call (unref-call (deref 2 ecx)))
@@ -1795,8 +1794,11 @@
 (def emit-funcall-a (si env args)
   (if args
     (do
-      (emit-expr si env (car args))
-      (emit-save si eax)
+      (if (immediatep (car args)) ; optimization if arg is an immediate
+        (emit-save si (imm (imm-rep (car args))))
+        (do
+          (emit-expr si env (car args))
+          (emit-save si eax)))
       (emit-funcall-a (next-si si) env (cdr args)))))
 
 (def emit-funcall (si env expr tail apply-p)
@@ -1813,7 +1815,7 @@
   ; emit code for calling function in si(%esp) and use args-generator
   ; to emit code to pass the arguments
   ; clear space reserved for frame-sentinel and ret. adress
-  (emit-save (next-si si) (imm 0))
+  (emit-save (next-si si) (imm frame-sentinel));0))
   (emit-save (next-si-n si 2) (imm 0))
   ; leave space for previous closure pointer, 
   ; for frame-sentinel and for return adress
@@ -1838,7 +1840,7 @@
 	  (emit-load si edi)
 	  (emit-save si ebx)
 	  ; put frame sentinel
-	  (emit-save (next-si si) (imm frame-sentinel))
+	  ;(emit-save (next-si si) (imm frame-sentinel))
 	  (if apply-p
             (do
               (emit-unrolled-arg last-si env)
