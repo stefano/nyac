@@ -437,23 +437,62 @@
   ;  (addl (imm si) esp)
   ;  (jmp '__type_error)
   ;  (label cont-label)))
-  (addl (imm si) esp)
+  (addl (imm (+ si wordsize)) esp)
   (call (make-string "__check_" name))
-  (subl (imm si) esp))
+  (subl (imm (+ si wordsize)) esp))
 
-(def emit-static-type-check-routine (name mask tag)
+(def emit-get-tag (src dest-reg tmp-reg)
+  ; get the tag of the object pointed by the register src
+  ; put tag in dest-reg
+  (let cont (unique-label) ; label to the end of this routine
+    ; check if it is a character
+    (movl src dest-reg)
+    (op-and (imm chmask) dest-reg)
+    (cmp (imm chtag) dest-reg)
+    (je cont) ; yes it is
+    ; check if it is a basic type
+    (movl src dest-reg)
+    (op-and (imm basicmask) dest-reg)
+    (cmp (imm extendedtag) dest-reg) ; is it an extended type?
+    (jne cont)
+    (movl (deref (- extendedtag) src) dest-reg) ; get extended type tag
+    ; special case to handle strings' tag
+    (movl dest-reg tmp-reg) 
+    (op-and (imm fxmask) tmp-reg)
+    (cmp (imm strtag) tmp-reg)
+    (jne cont)
+    (movl (imm extendedtag) dest-reg) ; it's a string
+    (label cont)))
+
+(def emit-static-type-check-routine (name mask tag extended-p)
   (decl-globl (make-string "__check_" name))
   (emit-fun-header (make-string "__check_" name))
   (movl eax ebx)
-  (op-and (imm mask) ebx)
-  (cmp (imm tag) ebx)
+  (op-and (imm (if extended-p basicmask mask)) ebx)
+  (cmp (imm (if extended-p extendedtag tag)) ebx)
   (let err-label (unique-label)
     (jne err-label)
+    (if extended-p
+      (do
+        (movl (deref (- extendedtag) eax) ebx) ; get extended object tag
+        (if mask
+          (op-and (imm mask) ebx))
+        (cmp (imm tag) ebx)
+        (jne err-label)))
     (emit-fun-ret)
     (label err-label)
-    ; clear return address to avoid confusing __print_backtrace
-    (emit-save wordsize (imm 0))
-    (movl (imm 0) eax)
+    (subl (imm wordsize) esp) ; adjust esp to be consistent with labelcall
+    (emit-save wordsize (imm frame-sentinel))
+    (emit-save 0 (imm 0)) ; won't return, no need to have a valid ret. point
+    (if (and extended-p mask)
+      (movl (imm (+ extendedtag tag)) ecx)
+      (movl (imm tag) ecx))
+    (shll (imm fxshift) ecx) ; make the tag a fixnum
+    (emit-save (next-si 0) ecx) ; pass expected tag
+    (emit-get-tag eax ebx ecx)
+    (shll (imm fxshift) ebx)
+    (emit-save (next-si-n 0 2) ebx) ; pass tag found
+    (movl (imm 2) eax) ; number of args passed
     (jmp '__type_error)))
 
 (def emit-extended-type-check (si env tag . mask)
@@ -487,16 +526,19 @@
   (emit-type-check si env "vec"));vecmask vectag))
 
 (def emit-is-str (si env)
-  (emit-extended-type-check si env strtag fxmask))
+  (emit-type-check si env "str"));strtag fxmask))
 
 (def emit-is-float (si env)
-  (emit-extended-type-check si env floattag))
+  (emit-type-check si env "float"));floattag))
 
 (def emit-is-sym (si env)
   (emit-type-check si env "sym"));symbolmask symboltag))
 
 (def emit-is-closure (si env)
   (emit-type-check si env "closure"));closuremask closuretag))
+
+(def emit-is-continuation (si env)
+  (emit-type-check si env "continuation"))
 
 (def emit-exact-arg-count-check (si env n)
   (with (error-label (unique-label)
@@ -2110,23 +2152,15 @@
 (def emit-static-routines ()
   ; emit code for static routines
   ;(emit-thread-trampoline)
-  ; these routines expect return adress in ecx
-  (emit-static-type-check-routine "extended" basicmask extendedtag)
-  (emit-static-type-check-routine "fx" fxmask fxtag)
-  (emit-static-type-check-routine "ch" chmask chtag)
-  (emit-static-type-check-routine "cell" cellmask celltag)
-  (emit-static-type-check-routine "vec" vecmask vectag)
-  (emit-static-type-check-routine "sym" symbolmask symboltag)
-  (emit-static-type-check-routine "closure" closuremask closuretag)
-  ; function call (with exactly one arg) expects:
-  ; argument in eax
-  ; closure in ebx
-  ; stack index in edx
-  ; (emit-fun-header funcall-lbl)
-  
-  ; vec-ref
-  ; str-ref
-  nil)
+  (emit-static-type-check-routine "fx" fxmask fxtag nil)
+  (emit-static-type-check-routine "ch" chmask chtag nil)
+  (emit-static-type-check-routine "cell" cellmask celltag nil)
+  (emit-static-type-check-routine "vec" vecmask vectag nil)
+  (emit-static-type-check-routine "sym" symbolmask symboltag nil)
+  (emit-static-type-check-routine "closure" closuremask closuretag nil)
+  (emit-static-type-check-routine "str" fxmask strtag t)
+  (emit-static-type-check-routine "float" nil floattag t)
+  (emit-static-type-check-routine "continuation" nil continuation-tag t))
 
 (def emit-program ()
   ;(emit-static-routines)
@@ -2187,7 +2221,7 @@
 (install-primop '__restore-continuation
   (fn (si env cont-expr value)
     (emit-expr si env cont-expr)
-    (emit-extended-type-check si env continuation-tag)
+    (emit-is-continuation si env)
     (emit-save si eax)
     (emit-expr (next-si si) env value)
     (movl eax edi) ; save value to return from continuation

@@ -26,6 +26,7 @@
                    (read/tbl stream read-table))
       (err (str-append "Unknown char: " (char->str c))))))
 
+; handles ssyntax -- currently hardwired for f:g -> (compose f g)
 (def expand-ssyntax (str)
   (let aux nil
     (set aux (fn (pos)
@@ -54,7 +55,7 @@
       (feach (fn (c) (do (str-set str i c) (set i (+ i 1)))) l)
       (if (iso str "t") t 
           (iso str "nil") nil
-          (intern str)))))
+          (expand-ssyntax str)))))
 
 ; read-symbol must be the last, because it catches (almost) everything
 (set read-table 

@@ -13,7 +13,10 @@
   (def repl ()
     (ccc [set __error_continuation
              (fn (s)
-               (print (make-string "Error: " s))
+               (if (consp s)
+                 (print (make-string "Error: expected type " (car s) 
+                                     " but got type " (cdr s)))
+                 (print (make-string "Error: " s)))
                (__print_backtrace)
                (_ nil))])
     (write-string "arc> " out)

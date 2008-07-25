@@ -115,6 +115,8 @@
 
 (def acons (x) (consp x))
 
+(def car (x) (car x))
+
 (def not (x) (not x))
 
 (def symbolp (x) (symbolp x))

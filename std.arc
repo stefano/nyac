@@ -1,7 +1,41 @@
 ;  Copyright (c) 2008 Dissegna Stefano
 ;  Released under the terms of the GNU LGPL
 
-(labels ((__error 
+(labels ((__print_strings ; prints all strings passed to stderr
+           (code strings ()
+             (__if strings
+               (do
+                 (ffi-call "a_write" 2 (car strings) (str-len (car strings)))
+	         (labelcall __print_strings (cdr strings))))))
+
+         ; converts between type tags and type names
+         ; 0, 4 -> fixnum
+         ; 1 -> cons
+         ; 2 -> function
+         ; 3 -> symbol
+         ; 5 -> vector
+         ; 6 -> string
+         ; 15 -> character
+         ; 47 -> nil
+         ; 111 -> t
+         ; 175 -> continuation
+         ; 207 -> float
+         (__type_to_name 
+           (code (tag) ()
+             (__if (__if (is tag 0) t (is tag 4)) "fixnum"
+               (__if (is tag 1) "cons"
+                 (__if (is tag 2) "function"
+                   (__if (is tag 3) "symbol"
+                     (__if (is tag 5) "vector"
+                       (__if (is tag 6) "string"
+                         (__if (is tag 15) "char"
+                           (__if (is tag 47) "nil"
+                             (__if (is tag 111) "t"
+                               (__if (is tag 175) "continuation"
+                                 (__if (is tag 207) "float"
+                                   "unknown")))))))))))))
+
+         (__error 
 	   (code (msg) ()
              (__if __error_continuation
 	       (funcall __error_continuation msg)
@@ -10,10 +44,18 @@
 	         (__print_backtrace)
 	         (ffi-call "exit" 1)))))
 
-	 (__type_error 
-	   (code () ()
-	     (labelcall __error "Wrong type
-")))
+	 (__type_error
+	   (code (expected-tag got-tag) ()
+             (__let ((expected (labelcall __type_to_name expected-tag))
+                     (got (labelcall __type_to_name got-tag)))
+               (__if __error_continuation
+                 (funcall __error_continuation (cons expected got))
+	         (do
+                   (labelcall __print_strings "Wrong type: expected " 
+                                              expected ", got " got "
+")
+                   (__print_backtrace)
+                   (ffi-call "exit" 1))))))
 	 
 	 (__unbound_error
 	   (code (s) ()
