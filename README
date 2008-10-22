@@ -25,7 +25,7 @@ $ cd nyac
 now you'll need to unpack the precompiled binaries and to set LD_LIBRARY_PATH 
 (this assumes that you're using bash):
 
-$ tar -jxvf nyac-build-linux-x86-32.tar.bz2
+$ tar -jxvf nyac-build-linux-x86-32-'insert most recent date here'.tar.bz2
 
 $ export LD_LIBRARY_PATH=build-arc:$LD_LIBRARY_PATH
 
@@ -37,7 +37,7 @@ $ ./build-arc/test.arc.run
 
 The two most important ones:
 
-- Continuations support
+- Threading
 - Lists, vectors, hash tables, etc. in function call position
 
 Others (in no particular order):
@@ -50,7 +50,6 @@ Others (in no particular order):
   (unquote ...))
 - bignums, ratnums, etc. Only fixnums and floating point numbers are supported
 - only ASCII characters are supported
-- threading
 - hash tables are still not implemented
 
 The list could go on...
