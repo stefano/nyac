@@ -54,6 +54,7 @@
 (set extendedtag 6) ; #b110
 
 (set strtag fxtag)
+(set strchar-offset (- wordsize extendedtag))
 
 (set floattag 207) ; #xCF
 (set float-offset (- wordsize extendedtag))
@@ -76,10 +77,7 @@
 (set setq-sym 'set)
 
 (set call-table-lbl "__call_table")
-(set cons-ref-lbl "__cons_ref")
-(set vec-ref-lbl "__vec_ref")
-(set str-ref-lbl "__str_ref")
-(set funcall-lbl "__funcall")
+(set call-table-err-lbl "__call_table_type_error")
 
 (def fixnump (x)
   (fxp x)); (<= fxlower x) (<= x fxupper)))
@@ -277,6 +275,9 @@
 
 (def emit-load (si reg)
   (emit "    movl " si "(" esp "), " reg))
+
+(def pushl (what)
+  (emit "    pushl " what))
 
 (def next-si (si)
   (- si wordsize))
@@ -582,13 +583,16 @@
     (subl (imm si) esp)
     (label cont-label)))
 
-(def emit-bounds-check (si tag)
+(def emit-bounds-check (si tag reg)
   ; emit error checking on vector/string access. Expects vector/string on the 
   ; stack and the index in eax
+  ; if reg is given the vector/string is supposed to be there
   (with (error-label (unique-label)
 	 cont-label (unique-label))
-    (movl (deref si esp) ebx)
-    (movl (deref (- tag) ebx) ebx) ; gets size
+    (if reg 
+      (movl reg ebx)
+      (movl (deref si esp) ebx))
+    (movl (deref (- tag) ebx) ebx) ; get size
     (cmp (imm 0) eax)
     (jl error-label) ; check for negative index
     (cmp ebx eax)
@@ -864,7 +868,7 @@
   (emit-save si eax)
   (emit-expr (next-si si) env arg2)
   (emit-is-fx (next-si si) env)
-  (emit-bounds-check si vectag)
+  (emit-bounds-check si vectag nil)
   (emit-save (next-si si) eax)
   (emit-expr (next-si-n si 2) env arg3)
   (emit-load si ebx) ; get vector adress
@@ -879,7 +883,7 @@
   (emit-save si eax)
   (emit-expr (next-si si) env arg2)
   (emit-is-fx (next-si si) env)
-  (emit-bounds-check si vectag)
+  (emit-bounds-check si vectag nil)
   (emit-load si ebx) ; get vector adress
   (addl eax ebx) ; sum offset
   (movl (deref (+ wordsize (- vectag)) ebx) eax)) ; get value
@@ -948,7 +952,7 @@
     (emit-save si eax)
     (emit-expr (next-si si) env arg2)
     (emit-is-fx (next-si si) env)
-    (emit-bounds-check si extendedtag)
+    (emit-bounds-check si extendedtag nil)
     (emit-save (next-si si) eax)
     (emit-expr (next-si-n si 2) env arg3)
     (emit-is-ch (next-si-n si 2) env)
@@ -968,7 +972,7 @@
     (emit-save si eax)
     (emit-expr (next-si si) env arg2)
     (emit-is-fx (next-si si) env)
-    (emit-bounds-check si extendedtag)
+    (emit-bounds-check si extendedtag nil)
     (emit-load si ebx) ; get string adress
     (shrl (imm fxshift) eax) ; 1-byte
     (addl eax ebx) ; sum offset
@@ -1327,13 +1331,13 @@
     (cmp (imm (imm-rep nil)) eax)
     (je altern)
     (if tail
-	(emit-tail-expr si env (if-conseq expr))
-	(emit-expr si env (if-conseq expr)))
+      (emit-tail-expr si env (if-conseq expr))
+      (emit-expr si env (if-conseq expr)))
     (jmp end-label)
     (label altern)
     (if tail
-	(emit-tail-expr si env (if-altern expr))
-	(emit-expr si env (if-altern expr)))
+      (emit-tail-expr si env (if-altern expr))
+      (emit-expr si env (if-altern expr)))
     (label end-label)))
 
 ;; let form
@@ -1833,6 +1837,11 @@
 ; --------------------------
 ; | ...................... |
 
+; return stack index of the nth argument of the current function
+; count starts from 0
+(def fn-arg-si (n)
+  (- (* (+ n 1) wordsize)))
+
 (def emit-funcall-a (si env args)
   (if args
     (do
@@ -1847,11 +1856,19 @@
   ; emits code for a function call, if tail is t treats function call as a 
   ; tail call, if apply-p is t unrolls the last argument into the stack
   (emit-expr si env (funcall-closure expr))
-  (emit-is-closure si env)
   (emit-save si eax) ; save closure
   (emit-funcall-real si env (fn (si env)
                               (emit-funcall-a si env (funcall-args expr)))
                      (len (funcall-args expr)) tail apply-p))
+
+(def emit-call-table-lookup ()
+  (with (go-on (unique-label)
+         error (unique-label))
+    (movl edi ebx)
+    (op-and (imm basicmask) ebx) ; set to basic tag
+    (shll (imm 2) ebx) ; hardwired: 2 = log2(wordsize), wordsize=4
+    (addl (imm call-table-lbl) ebx) ; ebx is the offset in the table
+    (jmp (unref-call (deref 0 ebx)))))
 
 (def emit-funcall-real (si env args-generator n-args tail apply-p)
   ; emit code for calling function in si(%esp) and use args-generator
@@ -1872,10 +1889,10 @@
 	  (if apply-p
 	    (do
               (emit-unrolled-arg 
-                (- (* wordsize n-args)) env);(len (funcall-args expr)))) env)
-	      (addl (imm (- n-args 1)) eax));(len (funcall-args expr)) 1)) eax))
-            (movl (imm n-args) eax));(len (funcall-args expr))) eax)) 
-	  (jmp (unref-call (deref closureaddr-offset edi))))
+                (- (* wordsize n-args)) env)
+	      (addl (imm (- n-args 1)) eax))
+            (movl (imm n-args) eax))
+          (emit-call-table-lookup))
 	(do
 	  ; set callee closure pointer and save caller closure pointer
 	  (movl edi ebx)
@@ -1886,11 +1903,15 @@
 	  (if apply-p
             (do
               (emit-unrolled-arg last-si env)
-	      (addl (imm (- n-args 1)) eax));(len (funcall-args expr)) 1)) eax))
-            (movl (imm n-args) eax));(len (funcall-args expr))) eax))
+	      (addl (imm (- n-args 1)) eax))
+            (movl (imm n-args) eax))
 	  ; adjust %esp, si is negative
-	  (addl (imm (next-si si)) esp)
-	  (call (unref-call (deref closureaddr-offset edi)))
+	  (addl (imm (next-si-n si 2)) esp)
+          (let ret-point (unique-label)
+            ;(pushl (imm ret-point)) ; push return address
+            (emit-save 0 (imm ret-point))
+	    (emit-call-table-lookup)
+            (label ret-point))
 	  (subl (imm (next-si si)) esp) ; adjust %esp
 	  (emit-load si edi))))) ; restore cl. pointer
 
@@ -2105,35 +2126,6 @@
 (def decl-globl (lbl)
   (emit "    .globl " lbl))
 
-(def emit-ar-call (si env expr tail apply-p)
-  ; emits code for a generic call: called object can be a function,
-  ; a vector, a string or a cons
-  ; if there are more than one arguments,called object is treated as function
-  ; doesn't work: how to distinguish beetwen the four apply/tail cases in the
-  ; static routines?
-  (if (or apply-p (is (len (funcall-args expr)) 1))
-    (do
-      (emit-expr si env (funcall-closure expr))
-      (emit-save si eax) ; save called object
-      (emit-expr (next-si si) (car (funcall-args expr))) ; the only arg
-      ; get the type tag
-      (movl eax ebx)
-      (andl basicmask ebx)
-      (movl (imm call-table-lbl) ecx) ; get the call table adress
-      (addl ebx ecx) ; make ecx point to the right entry in the table
-      (movl (deref 0 ecx) ecx) ; get entry
-      ; check for invalid entries
-      (cmp (imm 0) ecx)
-      (let cont-lbl (unique-label)
-        (jne cont-label)
-        (movl (imm 0) eax)
-        (addl (imm si) esp)
-        (jmp '__type_error)
-        (label cont-label))
-      ; do the dispatch
-      (jmp (unref-call (deref 0 ecx))))
-    (emit-funcall si env expr tail apply-p)))
-
 (def emit-thread-trampoline ()
   (emit-fun-header "thread_trampoline")
   (emit-load (- wordsize) eax) ; get thread argument
@@ -2149,9 +2141,38 @@
   (subl (- (* 2 wordsize)) esp)
   (emit-fun-ret))
 
+(set call-table-entries* (mkvec (+ basicmask 1) (cons call-table-err-lbl nil)))
+
+(def add-call (basictag emitter)
+  (let handler (unique-label)
+    (vec-set call-table-entries* basictag 
+             (cons handler (fn () (emit-fun-header handler) (emitter))))))
+
+(def emit-call-table-handlers (from to)
+  (if (< from to)
+    (let entry (vec-ref call-table-entries* from)
+      (if (cdr entry) ((cdr entry)))
+      (emit-call-table-handlers (+ from 1) to))))
+
+(def emit-call-table (from to)
+  (if (< from to)
+    (do
+      (decl-long (car (vec-ref call-table-entries* from)))
+      (emit-call-table (+ from 1) to))))
+
 (def emit-static-routines ()
   ; emit code for static routines
   ;(emit-thread-trampoline)
+
+  ; static call table
+  ; 0 means invalid position
+  ; init call table to error handlers
+  (emit-call-table-handlers 0 (+ basicmask 1))
+  (emit-call-table-error)
+  (decl-globl call-table-lbl)
+  (label call-table-lbl)
+  (emit-call-table 0 (+ basicmask 1))
+
   (emit-static-type-check-routine "fx" fxmask fxtag nil)
   (emit-static-type-check-routine "ch" chmask chtag nil)
   (emit-static-type-check-routine "cell" cellmask celltag nil)
@@ -2162,21 +2183,57 @@
   (emit-static-type-check-routine "float" nil floattag t)
   (emit-static-type-check-routine "continuation" nil continuation-tag t))
 
+(add-call closuretag 
+  (fn ()
+    (jmp (unref-call (deref closureaddr-offset edi)))))
+
+(add-call extendedtag
+  (fn ()
+    (withs (arg-si (fn-arg-si 0)
+            free (next-si arg-si))
+      (emit-exact-arg-count-check free nil 1)
+      (movl edi eax) ; emit-is-str expects object in eax
+      (emit-is-str free nil) ; check if it is a string
+      (emit-load arg-si eax) ; get index
+      (emit-is-fx free nil)
+      (emit-bounds-check free extendedtag edi)
+      (shrl (imm fxshift) eax) ; 1-byte
+      (addl eax edi) ; sum offset
+      (movb (deref strchar-offset edi) al) ; get value
+      (movzbl al eax)
+      (shll (imm chshift) eax)
+      (op-orl (imm chtag) eax)
+      (emit-fun-ret))))
+
+(add-call vectag
+  (fn ()
+    (withs (arg-si (fn-arg-si 0)
+            free (next-si arg-si))
+      (emit-exact-arg-count-check free nil 1)
+      (emit-load arg-si eax)
+      (emit-is-fx free nil)
+      (emit-bounds-check free vectag edi)
+      (addl eax edi) ; sum offset
+      (movl (deref (+ wordsize (- vectag)) edi) eax)
+      (emit-fun-ret))))
+
+(def do-n (f n)
+  (if (> n 0)
+    (do (f n) (do-n f (- n 1)))))
+
+(def emit-call-table-error ()
+  (decl-globl call-table-err-lbl)
+  (emit-fun-header call-table-err-lbl)
+  (movl edi ebx)
+  (op-and (imm basicmask) ebx)
+  (shll (imm fxshift) ebx)
+  (emit-save (fn-arg-si 0) (imm (imm-rep closuretag)))
+  (emit-save (fn-arg-si 1) ebx)
+  (movl (imm 2) eax)
+  (jmp '__type_error))
+
 (def emit-program ()
   ;(emit-static-routines)
-
-  ; static call table
-  ; 0 means invalid position
-;  (decl-globl call-table-lbl)
-;  (label call-table-lbl)
-;  (decl-long 0) ; 000 
-;  (decl-long cons-ref-lbl) ; 001
-;  (decl-long funcall-lbl) ; 010
-;  (decl-long 0) ; 011
-;  (decl-long 0) ; 100
-;  (decl-long vec-ref-lbl) ; 101
-;  (decl-long str-ref-lbl) ; 110, should also manage user defined object calls 
-;  (decl-long 0) ; 111
 
   ; entry function
   (globl "lisp_entry")
@@ -2197,7 +2254,7 @@
   ; init %edi at some meaningful value
   (movl (imm (imm-rep nil)) edi)
   ; call entry labels
-  (emit-expr (- wordsize) (mk-empty-env) '(__load nil));(string #\s #\t #\d #\. #\a #\r #\c #\. #\s #\o)))
+  (emit-expr (- wordsize) (mk-empty-env) '(__load nil))
   (emit-save (- wordsize) (imm frame-sentinel))
   (addl (imm (- wordsize)) esp)
   (call "__init")

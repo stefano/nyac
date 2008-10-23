@@ -392,4 +392,13 @@
 '((fx->fl 0) 0.0) 
 '((fx->fl 543) 543.0) 
 '((fx->fl (round 5.6)) 6.0) 
-'((fx->fl -89) -89.0))
+'((fx->fl -89) -89.0)
+
+; objects in function position tests
+
+'(("abcd" 1) #\b)
+'((let s "abcd" (str-set s 2 #\k) (s 2)) #\k)
+'(((mkvec 10 nil) 9) nil)
+'((let v (mkvec 11 nil) (vec-set v 0 42) (v 0)) 42)
+
+)
